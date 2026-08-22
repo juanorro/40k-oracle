@@ -154,6 +154,124 @@ def keywords_of(entry):
                    if link.get("name")})
 
 
+def entries_with_parent(node):
+    """Cada entrada anidada junto al contenedor directo que la declara."""
+    for key in CHILD_KEYS:
+        for child in node.get(key) or []:
+            yield child, node
+            yield from entries_with_parent(child)
+
+
+def cost_named(entry, name):
+    return next((c.get("value") for c in entry.get("costs") or []
+                 if c.get("name") == name), None)
+
+
+def condition_child_ids(node):
+    """Condiciones de un modifier, incluidas las de grupos anidados."""
+    for cond in node.get("conditions") or []:
+        yield cond
+    for group in node.get("conditionGroups") or []:
+        yield from condition_child_ids(group)
+
+
+def army_cap(entry):
+    """Cuantas veces puede repetirse la unidad en el ejercito."""
+    for con in entry.get("constraints") or []:
+        if (con.get("type") == "max" and con.get("field") == "selections"
+                and con.get("scope") in ("force", "roster")):
+            return con.get("value")
+    return None
+
+
+def condition_holds(cond, chosen_id):
+    """Evalua una condicion suponiendo que solo esta elegido `chosen_id`."""
+    if cond.get("field") != "selections":
+        return True          # no depende del tamano de partida
+    count = 1 if cond.get("childId") == chosen_id else 0
+    value = cond.get("value") or 0
+    return {
+        "equalTo": count == value,
+        "notEqualTo": count != value,
+        "atLeast": count >= value,
+        "atMost": count <= value,
+        "lessThan": count < value,
+        "greaterThan": count > value,
+    }.get(cond.get("type"), True)
+
+
+def conditions_hold(node, chosen_id, operator="and"):
+    """Evalua el arbol de condiciones respetando los and/or de cada grupo."""
+    results = [condition_holds(c, chosen_id) for c in node.get("conditions") or []]
+    results += [conditions_hold(g, chosen_id, g.get("type", "and"))
+                for g in node.get("conditionGroups") or []]
+    if not results:
+        return True
+    return all(results) if operator == "and" else any(results)
+
+
+def repeat_count(modifier, chosen_id):
+    """Veces que se aplica un modifier con bloque `repeats`.
+
+    Suponiendo que solo esta elegido el tamano de partida, cualquier `repeats`
+    que cuente otra cosa da cero y el modifier no llega a aplicarse.
+    """
+    repeats = modifier.get("repeats") or []
+    if not repeats:
+        return 1
+    counts = []
+    for rep in repeats:
+        selected = 1 if rep.get("childId") == chosen_id else 0
+        counts.append(selected // (rep.get("value") or 1))
+    return min(counts)
+
+
+def battle_sizes(gs):
+    """Limites de puntos, destacamentos y realces segun el tamano de partida.
+
+    El sistema declara un limite base en el 'Army Roster' y lo reescribe con
+    modifiers condicionados al Battle Size. Las condiciones forman un arbol
+    and/or que hay que evaluar entero: aplanarlo da limites equivocados.
+    """
+    entry = next((e for e in gs.get("sharedSelectionEntries") or []
+                  if e.get("name") == "Battle Size"), None)
+    if entry is None:
+        return []
+    options = {}
+    for group in entry.get("selectionEntryGroups") or []:
+        for opt in group.get("selectionEntries") or []:
+            if "Point limit" in (opt.get("name") or ""):
+                options[opt["id"]] = re.sub(r"^\d+\.\s*", "", opt["name"]).split(" (")[0]
+
+    force = (gs.get("forceEntries") or [{}])[0]
+    fields = {"51b2-306e-1021-d207": "points",
+              "82ae-1066-5107-6ae0": "detachment_points",
+              "f759-1bc4-cb3a-f0d2": "enhancements"}
+    limits = {con["id"]: (fields[con["field"]], con.get("value"))
+              for con in force.get("constraints") or []
+              if con.get("field") in fields and con.get("type") == "max"}
+
+    sizes = []
+    for oid, name in options.items():
+        values = {key: base for key, base in limits.values()}
+        # En orden de documento, como los aplica BattleScribe.
+        for mod in force.get("modifiers") or []:
+            if mod.get("field") not in limits or not conditions_hold(mod, oid):
+                continue
+            times = repeat_count(mod, oid)
+            if times < 1:
+                continue
+            key = limits[mod["field"]][0]
+            if mod.get("type") == "set":
+                values[key] = mod.get("value")
+            elif mod.get("type") == "increment":
+                values[key] += (mod.get("value") or 0) * times
+            elif mod.get("type") == "decrement":
+                values[key] -= (mod.get("value") or 0) * times
+        sizes.append({"name": name, **values})
+    return sizes
+
+
 def main():
     if not SRC.is_dir():
         sys.exit("No hay fuentes. Ejecuta primero scripts/sync-sources.sh")
@@ -198,6 +316,21 @@ def main():
         stale.unlink()
 
     factions, all_units, all_weapons = [], [], {}
+    all_detachments, all_enhancements = [], []
+    detachment_names = {}
+
+    # Un destacamento es lo que cuesta Detachment Points; un realce, lo que
+    # cuesta Enhancements. Es el discriminador mas estable de la fuente.
+    for cat in catalogues:
+        for entry, _ in entries_with_parent(cat):
+            if (cost_named(entry, "Detachment Points") or 0) >= 1:
+                detachment_names[entry["id"]] = entry.get("name")
+                all_detachments.append({
+                    "id": entry["id"],
+                    "name": entry.get("name"),
+                    "faction": cat["name"],
+                    "detachment_points": cost_named(entry, "Detachment Points"),
+                })
 
     for cat in catalogues:
         units = []
@@ -224,6 +357,7 @@ def main():
                 "faction_id": cat["id"],
                 "faction": cat["name"],
                 "single_model": entry.get("type") == "model",
+                "max_in_army": army_cap(entry),
                 "points": tiers,
                 "profiles": profiles,
                 "keywords": keywords_of(entry),
@@ -243,6 +377,45 @@ def main():
             out = DATA / "units" / f"{slugify(cat['name'])}.json"
             out.write_text(json.dumps(units, indent=1, ensure_ascii=False) + "\n")
 
+    # Los realces cuelgan de un grupo que se oculta salvo que este elegido su
+    # destacamento; esas condiciones son el vinculo entre ambos.
+    # Un mismo realce aparece bajo cada personaje que puede llevarlo, y cada
+    # aparicion esta condicionada a un destacamento distinto, asi que hay que
+    # acumular los vinculos de todas ellas en vez de quedarse con la primera.
+    by_id = {}
+    for cat in catalogues:
+        for entry, parent in entries_with_parent(cat):
+            if (cost_named(entry, "Enhancements") or 0) < 1:
+                continue
+            record = by_id.setdefault(entry["id"], {
+                "id": entry["id"],
+                "name": entry.get("name"),
+                "faction": cat["name"],
+                "points": cost_named(entry, "pts"),
+                "detachments": set(),
+            })
+            # El gating puede estar en el grupo contenedor o en el propio realce.
+            for mod in (entry.get("modifiers") or []) + (parent.get("modifiers") or []):
+                if mod.get("field") != "hidden":
+                    continue
+                for cond in condition_child_ids(mod):
+                    name = detachment_names.get(cond.get("childId"))
+                    if name:
+                        record["detachments"].add(name)
+
+    all_enhancements = [{**e, "detachments": sorted(e["detachments"])}
+                        for e in by_id.values()]
+    all_enhancements.sort(key=lambda e: (e["faction"], e["name"]))
+    all_detachments.sort(key=lambda d: (d["faction"], d["name"]))
+    sizes = battle_sizes(next(r for r in roots if r.get("type") == "gameSystem"))
+
+    (DATA / "detachments.json").write_text(
+        json.dumps(all_detachments, indent=1, ensure_ascii=False) + "\n")
+    (DATA / "enhancements.json").write_text(
+        json.dumps(all_enhancements, indent=1, ensure_ascii=False) + "\n")
+    (DATA / "battle_sizes.json").write_text(
+        json.dumps(sizes, indent=1, ensure_ascii=False) + "\n")
+
     factions.sort(key=lambda f: f["name"])
     (DATA / "factions.json").write_text(
         json.dumps(factions, indent=1, ensure_ascii=False) + "\n")
@@ -250,19 +423,26 @@ def main():
         json.dumps(sorted(all_weapons.values(), key=lambda w: w["name"] or ""),
                    indent=1, ensure_ascii=False) + "\n")
 
-    build_db(factions, all_units, all_weapons)
+    build_db(factions, all_units, all_weapons, all_detachments,
+             all_enhancements, sizes)
     print(f"{len(factions)} catálogos | {len(all_units)} unidades | "
           f"{len(all_weapons)} perfiles de arma")
+    print(f"{len(all_detachments)} destacamentos | {len(all_enhancements)} realces | "
+          f"{len(sizes)} tamaños de partida")
     print(f"data/ y {DB.name} regenerados")
 
 
-def build_db(factions, units, weapons):
+def build_db(factions, units, weapons, detachments, enhancements, sizes):
     DB.unlink(missing_ok=True)
     con = sqlite3.connect(DB)
     con.executescript("""
       create table factions (id text primary key, name text, is_library int, unit_count int);
       create table units (id text primary key, faction_id text, faction text, name text,
-                          single_model int, points_base int);
+                          single_model int, points_base int, max_in_army int);
+      create table battle_sizes (name text, points int, detachment_points int, enhancements int);
+      create table detachments (id text primary key, name text, faction text, detachment_points int);
+      create table enhancements (id text primary key, name text, faction text, points int);
+      create table enhancement_detachments (enhancement_id text, detachment text);
       create table unit_profiles (unit_id text, name text, m text, t text, sv text,
                                   w text, ld text, oc text, invuln text);
       create table unit_points (unit_id text, min_models int, pts int);
@@ -275,9 +455,19 @@ def build_db(factions, units, weapons):
     """)
     con.executemany("insert into factions values (?,?,?,?)",
                     [(f["id"], f["name"], int(f["is_library"]), f["unit_count"]) for f in factions])
-    con.executemany("insert or ignore into units values (?,?,?,?,?,?)",
+    con.executemany("insert or ignore into units values (?,?,?,?,?,?,?)",
                     [(u["id"], u["faction_id"], u["faction"], u["name"], int(u["single_model"]),
-                      u["points"][0]["pts"] if u["points"] else None) for u in units])
+                      u["points"][0]["pts"] if u["points"] else None, u["max_in_army"])
+                     for u in units])
+    con.executemany("insert into battle_sizes values (?,?,?,?)",
+                    [(s["name"], s.get("points"), s.get("detachment_points"),
+                      s.get("enhancements")) for s in sizes])
+    con.executemany("insert or ignore into detachments values (?,?,?,?)",
+                    [(d["id"], d["name"], d["faction"], d["detachment_points"]) for d in detachments])
+    con.executemany("insert or ignore into enhancements values (?,?,?,?)",
+                    [(e["id"], e["name"], e["faction"], e["points"]) for e in enhancements])
+    con.executemany("insert into enhancement_detachments values (?,?)",
+                    [(e["id"], d) for e in enhancements for d in e["detachments"]])
     con.executemany("insert into unit_profiles values (?,?,?,?,?,?,?,?,?)",
                     [(u["id"], p.get("name"), p.get("M"), p.get("T"), p.get("Sv"),
                       p.get("W"), p.get("LD"), p.get("OC"), p.get("InSv"))

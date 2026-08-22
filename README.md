@@ -23,17 +23,25 @@ Esto descarga las fuentes a `sources/` (fuera de git) y genera `data/` e `index.
 
 Ninguna está avalada por Games Workshop.
 
+## Validar listas
+
+```bash
+python3 scripts/validate.py lists/ejemplo-death-guard.json
+```
+
 ## Estado
 
-1.518 unidades y 5.364 perfiles de arma sobre 45 catálogos.
+Sobre 45 catálogos: 1.518 unidades, 5.364 perfiles de arma, 267 destacamentos,
+877 realces y los tres tamaños de partida con sus límites.
 
-Huecos conocidos, todos por resolver enlaces entre catálogos:
+Huecos conocidos:
 
-- 8 unidades sin línea de características (0,5%) — el perfil vive en otro catálogo.
-- 38 unidades sin puntos (2,5%).
+- 8 unidades sin línea de características (0,5%) y 38 sin puntos (2,5%), por
+  enlaces entre catálogos sin resolver.
+- 74 de 267 destacamentos tienen menos de 4 realces y 8 realces no dicen a qué
+  destacamento pertenecen. Parece hueco de la fuente, que lleva dos meses viva.
 
-Todavía no se extraen: destacamentos, realces, estratagemas ni las restricciones
-de construcción de lista. `scripts/build.py` es el sitio donde añadirlos.
+Todavía no se extraen las estratagemas ni las reglas de destacamento.
 
 ## Estructura
 

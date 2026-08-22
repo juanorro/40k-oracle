@@ -1,0 +1,15 @@
+{
+  "name": "Death Guard — Virulent Vectorium",
+  "faction": "Chaos - Death Guard",
+  "battle_size": "Strike Force",
+  "detachments": ["Virulent Vectorium"],
+  "units": [
+    { "name": "Typhus" },
+    { "name": "Lord of Poxes", "enhancement": "Revolting Regeneration" },
+    { "name": "Plague Marines", "models": 10 },
+    { "name": "Plague Marines", "models": 5 },
+    { "name": "Deathshroud Terminators", "models": 6 },
+    { "name": "Myphitic Blight-hauler" },
+    { "name": "Nurglings", "models": 3 }
+  ]
+}
