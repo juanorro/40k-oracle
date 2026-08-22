@@ -38,9 +38,29 @@ Esquema de `index.db`:
 - `weapons(id, name, kind, range, attacks, skill, strength, ap, damage, keywords)`
 - `unit_weapons(unit_id, weapon_id)`
 - `battle_sizes(name, points, detachment_points, enhancements)` — límites del ejército
-- `detachments(id, name, faction, detachment_points)`
-- `enhancements(id, name, faction, points)`
-- `enhancement_detachments(enhancement_id, detachment)` — qué realce desbloquea cada destacamento
+- `detachments(faction, name, detachment_points, objective, unique_tag, source)`
+- `enhancements(faction, name, points, detachment, source)` — una fila por realce y destacamento
+- `mfm_points(faction, unit, unit_norm, copies_from, copies_to, models, points)` — **puntos oficiales**
+- `leaders(faction, leader, leader_norm, attach_to, attach_to_norm)` — a qué unidad puede unirse cada líder
+- `mfm_meta(version, updated)` — versión del Munitorum Field Manual cargada
+
+### De dónde salen los puntos
+
+**`mfm_points` es la fuente autoritativa**, del Munitorum Field Manual oficial.
+`unit_points` viene de BSData y se queda corto en los escalones de escuadra
+grande — úsalo solo si el MFM no tiene la unidad, y dilo cuando lo hagas.
+
+Reglas de tarificación del MFM:
+
+- Los tramos son **techos**: si la unidad tiene más modelos que el mínimo de su
+  tramo, pagas el tramo siguiente. Plague Marines con 6 modelos paga el precio
+  de 7 (125), no el de 5.
+- **Requisition Thresholds**: `copies_from`/`copies_to` acotan a qué ejemplar
+  aplica el precio. Deathshroud Terminators cuesta 160 las dos primeras veces
+  y 170 a partir de la tercera.
+- El MFM alterna singular y plural respecto a BSData, y a veces tarifa una
+  unidad bajo otra facción (Plague Marines bajo Death Guard aunque figure en el
+  catálogo de Chaos Space Marines).
 
 Notas de interpretación:
 
@@ -56,6 +76,8 @@ Notas de interpretación:
 - En 11ª los destacamentos **cuestan Detachment Points** (1-3 cada uno) y el
   ejército tiene un presupuesto según el tamaño de partida: 2 en Incursion,
   3 en Strike Force, 4 en Onslaught. Puedes llevar varios.
+- `unique_tag`: no puedes llevar dos destacamentos con la misma etiqueta.
+- `objective` es la Force Disposition que otorga el destacamento.
 
 Para las notas, `grep -r` sobre `notes/` es suficiente.
 
@@ -69,9 +91,10 @@ La lista es un JSON con `faction`, `battle_size`, `detachments` y `units`; cada
 unidad lleva `name`, opcionalmente `models` y `enhancement`. Ver
 [lists/ejemplo-death-guard.json](lists/ejemplo-death-guard.json).
 
-Comprueba límite de puntos, presupuesto de destacamento, tope de realces, que
-cada realce corresponda a un destacamento elegido y vaya sobre un Personaje,
-el máximo de repeticiones por unidad y que haya al menos un Personaje.
+Comprueba límite de puntos (con umbrales de requisición), presupuesto de
+destacamento, etiquetas Unique en conflicto, tope de realces, que cada realce
+corresponda a un destacamento elegido y vaya sobre un Personaje, el máximo de
+repeticiones por unidad y que haya al menos un Personaje.
 
 Todas las comprobaciones salen del catálogo, no de reglas escritas a mano.
 

@@ -11,6 +11,8 @@ import sqlite3
 import sys
 from pathlib import Path
 
+import mfm
+
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "sources" / "wh40k-11e"
 DATA = ROOT / "data"
@@ -272,6 +274,32 @@ def battle_sizes(gs):
     return sizes
 
 
+def merge_sources(bsdata_rows, mfm_rows, mfm_only_keys):
+    """Fusiona por faccion + nombre normalizado. El MFM sobrescribe."""
+    merged = {}
+    for row in bsdata_rows:
+        key = (row["faction"], mfm.norm(row["name"]))
+        merged[key] = {**row, **{k: None for k in mfm_only_keys}, "source": "bsdata"}
+    for row in mfm_rows:
+        key = (row["faction"], mfm.norm(row["name"]))
+        merged[key] = {**merged.get(key, {}), **row, "source": "mfm"}
+    return sorted(merged.values(), key=lambda r: (r["faction"], r["name"] or ""))
+
+
+def merge_enhancements(bsdata_rows, mfm_rows):
+    """Una fila por realce y destacamento. El MFM manda en puntos y vinculo."""
+    merged = {}
+    for row in bsdata_rows:
+        for det in row["detachments"] or [None]:
+            merged[(row["faction"], mfm.norm(row["name"]), mfm.norm(det))] = {
+                "faction": row["faction"], "name": row["name"],
+                "points": row["points"], "detachment": det, "source": "bsdata"}
+    for row in mfm_rows:
+        merged[(row["faction"], mfm.norm(row["name"]), mfm.norm(row["detachment"]))] = {
+            **row, "source": "mfm"}
+    return sorted(merged.values(), key=lambda r: (r["faction"], r["name"] or ""))
+
+
 def main():
     if not SRC.is_dir():
         sys.exit("No hay fuentes. Ejecuta primero scripts/sync-sources.sh")
@@ -409,10 +437,6 @@ def main():
     all_detachments.sort(key=lambda d: (d["faction"], d["name"]))
     sizes = battle_sizes(next(r for r in roots if r.get("type") == "gameSystem"))
 
-    (DATA / "detachments.json").write_text(
-        json.dumps(all_detachments, indent=1, ensure_ascii=False) + "\n")
-    (DATA / "enhancements.json").write_text(
-        json.dumps(all_enhancements, indent=1, ensure_ascii=False) + "\n")
     (DATA / "battle_sizes.json").write_text(
         json.dumps(sizes, indent=1, ensure_ascii=False) + "\n")
 
@@ -423,16 +447,35 @@ def main():
         json.dumps(sorted(all_weapons.values(), key=lambda w: w["name"] or ""),
                    indent=1, ensure_ascii=False) + "\n")
 
+    # El MFM oficial manda sobre BSData en puntos, destacamentos y realces.
+    # Lo que solo existe en BSData se conserva, marcado como tal.
+    catalogue_sizes = {f["name"]: f["unit_count"] for f in factions}
+    mfm_points, mfm_dets, mfm_enh, mfm_leaders, mfm_meta = mfm.load(catalogue_sizes)
+
+    all_detachments = merge_sources(all_detachments, mfm_dets,
+                                    ("objective", "unique_tag"))
+    all_enhancements = merge_enhancements(all_enhancements, mfm_enh)
+
+    (DATA / "detachments.json").write_text(
+        json.dumps(all_detachments, indent=1, ensure_ascii=False) + "\n")
+    (DATA / "enhancements.json").write_text(
+        json.dumps(all_enhancements, indent=1, ensure_ascii=False) + "\n")
+    (DATA / "points.json").write_text(
+        json.dumps(mfm_points, indent=1, ensure_ascii=False) + "\n")
+
     build_db(factions, all_units, all_weapons, all_detachments,
-             all_enhancements, sizes)
+             all_enhancements, sizes, mfm_points, mfm_leaders, mfm_meta)
     print(f"{len(factions)} catálogos | {len(all_units)} unidades | "
           f"{len(all_weapons)} perfiles de arma")
     print(f"{len(all_detachments)} destacamentos | {len(all_enhancements)} realces | "
           f"{len(sizes)} tamaños de partida")
+    print(f"MFM v{mfm_meta.get('version')} ({mfm_meta.get('updated')}): "
+          f"{len(mfm_points)} costes | {len(mfm_leaders)} adscripciones de líder")
     print(f"data/ y {DB.name} regenerados")
 
 
-def build_db(factions, units, weapons, detachments, enhancements, sizes):
+def build_db(factions, units, weapons, detachments, enhancements, sizes,
+             mfm_points, mfm_leaders, mfm_meta):
     DB.unlink(missing_ok=True)
     con = sqlite3.connect(DB)
     con.executescript("""
@@ -440,9 +483,15 @@ def build_db(factions, units, weapons, detachments, enhancements, sizes):
       create table units (id text primary key, faction_id text, faction text, name text,
                           single_model int, points_base int, max_in_army int);
       create table battle_sizes (name text, points int, detachment_points int, enhancements int);
-      create table detachments (id text primary key, name text, faction text, detachment_points int);
-      create table enhancements (id text primary key, name text, faction text, points int);
-      create table enhancement_detachments (enhancement_id text, detachment text);
+      create table detachments (faction text, name text, detachment_points int,
+                                objective text, unique_tag text, source text);
+      create table enhancements (faction text, name text, points int,
+                                 detachment text, source text);
+      create table mfm_points (faction text, unit text, unit_norm text,
+                               copies_from int, copies_to int, models int, points int);
+      create table leaders (faction text, leader text, leader_norm text,
+                            attach_to text, attach_to_norm text);
+      create table mfm_meta (version text, updated text);
       create table unit_profiles (unit_id text, name text, m text, t text, sv text,
                                   w text, ld text, oc text, invuln text);
       create table unit_points (unit_id text, min_models int, pts int);
@@ -462,12 +511,21 @@ def build_db(factions, units, weapons, detachments, enhancements, sizes):
     con.executemany("insert into battle_sizes values (?,?,?,?)",
                     [(s["name"], s.get("points"), s.get("detachment_points"),
                       s.get("enhancements")) for s in sizes])
-    con.executemany("insert or ignore into detachments values (?,?,?,?)",
-                    [(d["id"], d["name"], d["faction"], d["detachment_points"]) for d in detachments])
-    con.executemany("insert or ignore into enhancements values (?,?,?,?)",
-                    [(e["id"], e["name"], e["faction"], e["points"]) for e in enhancements])
-    con.executemany("insert into enhancement_detachments values (?,?)",
-                    [(e["id"], d) for e in enhancements for d in e["detachments"]])
+    con.executemany("insert into detachments values (?,?,?,?,?,?)",
+                    [(d["faction"], d["name"], d.get("detachment_points"),
+                      d.get("objective"), d.get("unique_tag"), d["source"])
+                     for d in detachments])
+    con.executemany("insert into enhancements values (?,?,?,?,?)",
+                    [(e["faction"], e["name"], e.get("points"), e.get("detachment"),
+                      e["source"]) for e in enhancements])
+    con.executemany("insert into mfm_points values (?,?,?,?,?,?,?)",
+                    [(p["faction"], p["unit"], p["unit_norm"], p["copies_from"],
+                      p["copies_to"], p["models"], p["points"]) for p in mfm_points])
+    con.executemany("insert into leaders values (?,?,?,?,?)",
+                    [(l["faction"], l["leader"], l["leader_norm"], l["attach_to"],
+                      l["attach_to_norm"]) for l in mfm_leaders])
+    con.execute("insert into mfm_meta values (?,?)",
+                (mfm_meta.get("version"), mfm_meta.get("updated")))
     con.executemany("insert into unit_profiles values (?,?,?,?,?,?,?,?,?)",
                     [(u["id"], p.get("name"), p.get("M"), p.get("T"), p.get("Sv"),
                       p.get("W"), p.get("LD"), p.get("OC"), p.get("InSv"))
@@ -489,6 +547,10 @@ def build_db(factions, units, weapons, detachments, enhancements, sizes):
       create index unit_keywords_idx on unit_keywords(keyword);
       create index unit_weapons_idx on unit_weapons(unit_id);
       create index weapons_name_idx on weapons(name);
+      create index mfm_points_idx on mfm_points(faction, unit_norm);
+      create index detachments_idx on detachments(faction, name);
+      create index enhancements_idx on enhancements(faction, name);
+      create index leaders_idx on leaders(faction, attach_to_norm);
     """)
     con.commit()
     con.close()
