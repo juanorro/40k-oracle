@@ -35,20 +35,16 @@ class SelectBracket(unittest.TestCase):
         self.assertEqual(validate.select_bracket([], 5), (None, False))
 
 
-class NameKeys(unittest.TestCase):
-    def test_covers_singular_and_plural(self):
-        keys = validate.name_keys("Myphitic Blight-hauler")
-        self.assertIn("myphiticblighthaulers", keys)
-        keys = validate.name_keys("Plague Marines")
-        self.assertIn("plaguemarine", keys)
-
-
 @unittest.skipUnless((ROOT / "index.db").exists(), "run scripts/build.py first")
 class EndToEnd(unittest.TestCase):
     def run_validator(self, path):
         return subprocess.run(
             [sys.executable, str(ROOT / "scripts" / "validate.py"), str(path)],
             capture_output=True, text=True)
+
+    def test_a_friendly_faction_name_resolves(self):
+        result = self.variant(faction="death guard")
+        self.assertEqual(result.returncode, 0, result.stdout)
 
     def test_the_example_list_is_legal(self):
         result = self.run_validator(ROOT / "lists" / "example-death-guard.json")

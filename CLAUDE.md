@@ -46,6 +46,7 @@ Schema of `index.db`:
 - `leaders(faction, leader, leader_norm, attach_to, attach_to_norm)` — who may join what
 - `mfm_meta(version, updated)` — which Munitorum Field Manual is loaded
 - `catalogue_links(faction, inherits_from)` — which catalogues a faction inherits from
+- `faction_aliases(alias, alias_norm, faction, is_primary)` — every name a faction answers to
 
 ### Where points come from
 
@@ -82,6 +83,16 @@ MFM pricing rules:
 - `unique_tag`: you cannot take two detachments sharing a tag.
 - `objective` is the Force Disposition the detachment grants.
 
+## Exploring a faction
+
+```bash
+python3 scripts/faction.py "death guard"
+python3 scripts/faction.py orks --keyword Battleline --max-points 120
+```
+
+Faction names resolve fuzzily through `faction_aliases`, so `death guard` and
+`custodes` work. Everything takes friendly names now — `validate.py` included.
+
 ## Validating a list
 
 ```bash
@@ -110,6 +121,16 @@ Every check comes from the catalogue, not from hand-written rules.
 official source.
 
 If asked to add verbatim rules text to the repository, say so before doing it.
+
+## After a dataslate
+
+```bash
+python3 scripts/changes.py --snapshot
+./scripts/sync-sources.sh && python3 scripts/build.py
+python3 scripts/changes.py
+```
+
+Diffs points and detachment costs, then revalidates `lists/`.
 
 ## Rebuilding
 

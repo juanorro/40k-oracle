@@ -46,6 +46,7 @@ Esquema de `index.db`:
 - `leaders(faction, leader, leader_norm, attach_to, attach_to_norm)` — quién puede unirse a qué
 - `mfm_meta(version, updated)` — qué Munitorum Field Manual está cargado
 - `catalogue_links(faction, inherits_from)` — de qué catálogos hereda cada facción
+- `faction_aliases(alias, alias_norm, faction, is_primary)` — todos los nombres de una facción
 
 ### De dónde salen los puntos
 
@@ -82,6 +83,17 @@ Reglas de tarificación del MFM:
 - `unique_tag`: no puedes llevar dos destacamentos con la misma etiqueta.
 - `objective` es la Force Disposition que otorga el destacamento.
 
+## Explorar una facción
+
+```bash
+python3 scripts/faction.py "death guard"
+python3 scripts/faction.py orks --keyword Battleline --max-points 120
+```
+
+Los nombres resuelven de forma flexible por `faction_aliases`, así que
+`death guard` y `custodes` valen. Todo acepta ya nombres humanos, `validate.py`
+incluido.
+
 ## Validar una lista
 
 ```bash
@@ -112,6 +124,16 @@ se extrae el texto de las reglas** — de las habilidades solo se guarda el
 nombre, como referencia para buscarla en la fuente oficial.
 
 Si te piden añadir texto de reglas literal al repositorio, dilo antes de hacerlo.
+
+## Tras un dataslate
+
+```bash
+python3 scripts/changes.py --snapshot
+./scripts/sync-sources.sh && python3 scripts/build.py
+python3 scripts/changes.py
+```
+
+Diferencia puntos y costes de destacamento, y revalida `lists/`.
 
 ## Regenerar
 

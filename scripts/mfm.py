@@ -10,6 +10,8 @@ from pathlib import Path
 
 import yaml
 
+from names import norm  # noqa: F401  (re-exported: callers use mfm.norm)
+
 MFM_DIR = Path(__file__).resolve().parent.parent / "sources" / "wh40k-11e-mfm" / "data"
 
 # The MFM names factions more tersely than the BSData catalogues.
@@ -24,10 +26,6 @@ FACTION_ALIASES = {
     "Titan Legions": "Library - Titans",
     "Chaos Titan Legions": "Library - Titans",
 }
-
-
-def norm(text):
-    return re.sub(r"[^a-z0-9]", "", (text or "").lower())
 
 
 def parse_range(text):
@@ -54,11 +52,11 @@ def match_faction(mfm_name, catalogues):
 
 
 def load(catalogues):
-    """Return (points, detachments, enhancements, leaders, meta)."""
-    points, detachments, enhancements, leaders = [], [], [], []
+    """Return (points, detachments, enhancements, leaders, aliases, meta)."""
+    points, detachments, enhancements, leaders, aliases = [], [], [], [], []
     meta = {}
     if not MFM_DIR.is_dir():
-        return points, detachments, enhancements, leaders, meta
+        return points, detachments, enhancements, leaders, aliases, meta
 
     for path in sorted(MFM_DIR.glob("*.yaml")):
         doc = yaml.safe_load(path.open())
@@ -69,6 +67,11 @@ def load(catalogues):
         faction = match_faction(doc["name"], catalogues)
         if faction is None:
             continue
+
+        # The MFM is where the human-readable faction names live: catalogues
+        # are called 'Chaos - Death Guard', people say 'Death Guard'.
+        aliases.append({"alias": doc["name"], "faction": faction, "is_primary": True})
+        aliases.append({"alias": doc["slug"], "faction": faction, "is_primary": False})
 
         for det in doc.get("detachments") or []:
             detachments.append({
@@ -109,4 +112,4 @@ def load(catalogues):
                     "attach_to_norm": norm(target),
                 })
 
-    return points, detachments, enhancements, leaders, meta
+    return points, detachments, enhancements, leaders, aliases, meta

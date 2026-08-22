@@ -8,23 +8,14 @@ BSData is used and a warning is emitted, because BSData falls short on the
 larger squad-size tiers.
 """
 import json
-import re
-import sqlite3
 import sys
 from pathlib import Path
 
+import query
+from names import name_keys, norm
+
 ROOT = Path(__file__).resolve().parent.parent
 DB = ROOT / "index.db"
-
-
-def norm(text):
-    return re.sub(r"[^a-z0-9]", "", (text or "").lower())
-
-
-def name_keys(name):
-    """The MFM alternates singular and plural against BSData."""
-    base = norm(name)
-    return (base, base + "s", base.rstrip("s"))
 
 
 def select_bracket(rows, models):
@@ -53,17 +44,6 @@ class Report:
 
     def ok(self):
         return not self.errors
-
-
-def faction_scope(con, faction):
-    """The faction plus the catalogues it inherits units from.
-
-    A chapter such as Ultramarines holds 16 units of its own and takes the rest
-    from the Space Marines catalogue.
-    """
-    inherited = [r[0] for r in con.execute(
-        "select inherits_from from catalogue_links where faction=?", (faction,))]
-    return [faction, *inherited]
 
 
 def mfm_cost(con, scope, unit_name, models, copy_index, report):
@@ -190,7 +170,7 @@ def check_leader(con, leader_name, target, in_list, report):
 def validate(path):
     army = json.loads(Path(path).read_text())
     report = Report()
-    con = sqlite3.connect(DB)
+    con = query.connect()
 
     size = con.execute(
         "select name, points, detachment_points, enhancements from battle_sizes where name=?",
@@ -201,9 +181,14 @@ def validate(path):
                      f"Available: {', '.join(options)}.")
         return report, None
     size_name, pts_limit, dp_budget, enh_cap = size
-    faction = army.get("faction")
 
-    scope = faction_scope(con, faction)
+    faction, candidates = query.resolve_faction(con, army.get("faction"))
+    if faction is None:
+        hint = (f" Did you mean one of: {', '.join(candidates[:5])}?" if candidates
+                else " Run scripts/faction.py with no argument to list them.")
+        report.error(f"Unknown faction: '{army.get('faction')}'.{hint}")
+        return report, None
+    scope = query.faction_scope(con, faction)
     chosen, dp_spent = check_detachments(con, scope, army.get("detachments"), report)
     if dp_spent > dp_budget:
         report.error(f"Detachments: {dp_spent} DP against a budget of {dp_budget}.")

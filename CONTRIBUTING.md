@@ -36,6 +36,11 @@ sources/wh40k-11e-mfm   Munitorum Field Manual mirror (YAML)
                 │
                 ├── data/*.json    inspectable output
                 └── index.db       SQLite, what everything queries
+        │
+        ├── scripts/names.py    one normalisation, shared by everything
+        ├── scripts/query.py    faction resolution and shared reads
+        ├── scripts/faction.py  the faction dossier
+        └── scripts/changes.py  diff after a dataslate, revalidate lists
 ```
 
 `scripts/validate.py` only reads `index.db`. It never parses sources.

@@ -21,6 +21,14 @@ All notable changes to this project. Format based on
 - Regression test suite covering the condition tree, `repeats` blocks, points
   brackets and faction matching.
 
+- Faction aliases: `death guard` and `custodes` resolve to their catalogue, so
+  BSData strings are no longer required anywhere.
+- `scripts/faction.py`: faction dossier — detachments with DP and Unique clashes,
+  enhancements, units by type with costs, leader attachments; filterable.
+- `scripts/changes.py`: snapshot and diff across a dataslate, then revalidate
+  every saved list.
+- Skills for agents: `faction-brief`, `build-list`, `sync-data`.
+
 ### Notes
 
 - Generated data is no longer tracked in git; see [NOTICE](NOTICE).

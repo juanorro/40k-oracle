@@ -64,6 +64,17 @@ Main tables:
 
 Full schema and interpretation rules: [CLAUDE.md](CLAUDE.md).
 
+## Exploring a faction
+
+```bash
+python3 scripts/faction.py                       # list every faction
+python3 scripts/faction.py "death guard"         # detachments, enhancements, units
+python3 scripts/faction.py orks --keyword Battleline --max-points 120
+```
+
+Faction names are fuzzy: `death guard`, `Death Guard` and `custodes` all
+resolve to their catalogue.
+
 ## Validating a list
 
 ```bash
@@ -90,6 +101,24 @@ per-unit maximum, the minimum of one Character, and whether leaders may join
 the units they are attached to.
 
 Every check comes from the catalogue data. None are hand-written rules.
+
+## Keeping up with dataslates
+
+```bash
+python3 scripts/changes.py --snapshot
+./scripts/sync-sources.sh && python3 scripts/build.py
+python3 scripts/changes.py
+```
+
+Prints every points movement, detachment cost change and MFM version bump, then
+revalidates every list in `lists/` and tells you which ones broke.
+
+## Skills
+
+`.claude/skills/` ships three skills for agents working in this repository:
+`faction-brief`, `build-list` and `sync-data`. They encode the procedures above
+and one standing rule: never write a points value that was not read from the
+database.
 
 ## Why the Munitorum Field Manual is authoritative
 

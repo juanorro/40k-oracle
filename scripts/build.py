@@ -299,6 +299,32 @@ def merge_enhancements(bsdata_rows, mfm_rows):
     return sorted(merged.values(), key=lambda r: (r["faction"], r["name"] or ""))
 
 
+def faction_aliases(catalogue_sizes, mfm_aliases):
+    """Every name a faction can be called by, mapped to its catalogue.
+
+    Three sources: the MFM's human names, the full catalogue name, and the tail
+    of the catalogue name ('Chaos - Death Guard' -> 'Death Guard'). When a tail
+    is ambiguous the catalogue holding the most units wins.
+    """
+    seen, out = {}, []
+
+    def add(alias, faction, primary):
+        key = mfm.norm(alias)
+        if not key or key in seen:
+            return
+        seen[key] = faction
+        out.append({"alias": alias, "faction": faction, "is_primary": primary})
+
+    for entry in mfm_aliases:
+        add(entry["alias"], entry["faction"], entry["is_primary"])
+
+    for name in sorted(catalogue_sizes, key=lambda c: -catalogue_sizes[c]):
+        add(name, name, False)
+        tail = name.split(" - ")[-1]
+        add(tail, name, mfm.norm(tail) not in seen and False)
+    return out
+
+
 def main():
     if not SRC.is_dir():
         sys.exit("No sources. Run scripts/sync-sources.sh first.")
@@ -458,7 +484,9 @@ def main():
     # The official MFM overrides BSData on points, detachments and
     # enhancements. What exists only in BSData is kept, flagged as such.
     catalogue_sizes = {f["name"]: f["unit_count"] for f in factions}
-    mfm_points, mfm_dets, mfm_enh, mfm_leaders, mfm_meta = mfm.load(catalogue_sizes)
+    (mfm_points, mfm_dets, mfm_enh, mfm_leaders,
+     mfm_aliases, mfm_meta) = mfm.load(catalogue_sizes)
+    aliases = faction_aliases(catalogue_sizes, mfm_aliases)
 
     all_detachments = merge_sources(all_detachments, mfm_dets,
                                     ("objective", "unique_tag"))
@@ -474,7 +502,8 @@ def main():
         json.dumps(links, indent=1, ensure_ascii=False) + "\n")
 
     build_db(factions, all_units, all_weapons, all_detachments,
-             all_enhancements, sizes, mfm_points, mfm_leaders, mfm_meta, links)
+             all_enhancements, sizes, mfm_points, mfm_leaders, mfm_meta, links,
+             aliases)
     print(f"{len(factions)} catalogues | {len(all_units)} units | "
           f"{len(all_weapons)} weapon profiles")
     print(f"{len(all_detachments)} detachments | {len(all_enhancements)} enhancements | "
@@ -486,7 +515,7 @@ def main():
 
 
 def build_db(factions, units, weapons, detachments, enhancements, sizes,
-             mfm_points, mfm_leaders, mfm_meta, links):
+             mfm_points, mfm_leaders, mfm_meta, links, aliases):
     DB.unlink(missing_ok=True)
     con = sqlite3.connect(DB)
     con.executescript("""
@@ -504,6 +533,8 @@ def build_db(factions, units, weapons, detachments, enhancements, sizes,
                             attach_to text, attach_to_norm text);
       create table mfm_meta (version text, updated text);
       create table catalogue_links (faction text, inherits_from text);
+      create table faction_aliases (alias text, alias_norm text, faction text,
+                                    is_primary int);
       create table unit_profiles (unit_id text, name text, m text, t text, sv text,
                                   w text, ld text, oc text, invuln text);
       create table unit_points (unit_id text, min_models int, pts int);
@@ -540,6 +571,9 @@ def build_db(factions, units, weapons, detachments, enhancements, sizes,
                 (mfm_meta.get("version"), mfm_meta.get("updated")))
     con.executemany("insert into catalogue_links values (?,?)",
                     [(l["faction"], l["inherits_from"]) for l in links])
+    con.executemany("insert into faction_aliases values (?,?,?,?)",
+                    [(a["alias"], mfm.norm(a["alias"]), a["faction"], int(a["is_primary"]))
+                     for a in aliases])
     con.executemany("insert into unit_profiles values (?,?,?,?,?,?,?,?,?)",
                     [(u["id"], p.get("name"), p.get("M"), p.get("T"), p.get("Sv"),
                       p.get("W"), p.get("LD"), p.get("OC"), p.get("InSv"))
@@ -566,6 +600,7 @@ def build_db(factions, units, weapons, detachments, enhancements, sizes,
       create index enhancements_idx on enhancements(faction, name);
       create index leaders_idx on leaders(faction, attach_to_norm);
       create index catalogue_links_idx on catalogue_links(faction);
+      create index faction_aliases_idx on faction_aliases(alias_norm);
     """)
     con.commit()
     con.close()

@@ -67,6 +67,17 @@ Tablas principales:
 
 Esquema completo y reglas de interpretación: [CLAUDE.md](CLAUDE.md).
 
+## Explorar una facción
+
+```bash
+python3 scripts/faction.py                       # lista todas las facciones
+python3 scripts/faction.py "death guard"         # destacamentos, realces, unidades
+python3 scripts/faction.py orks --keyword Battleline --max-points 120
+```
+
+Los nombres de facción son flexibles: `death guard`, `Death Guard` y `custodes`
+resuelven a su catálogo.
+
 ## Validar una lista
 
 ```bash
@@ -93,6 +104,25 @@ unidad, el mínimo de un Personaje, y si los líderes pueden unirse a las unidad
 que se les asignan.
 
 Todas las comprobaciones salen del catálogo. Ninguna es una regla escrita a mano.
+
+## Seguir los dataslates
+
+```bash
+python3 scripts/changes.py --snapshot
+./scripts/sync-sources.sh && python3 scripts/build.py
+python3 scripts/changes.py
+```
+
+Imprime cada movimiento de puntos, cambio de coste de destacamento y subida de
+versión del MFM, y luego revalida todas las listas de `lists/` diciéndote cuáles
+se han roto.
+
+## Skills
+
+`.claude/skills/` incluye tres skills para agentes que trabajen en este
+repositorio: `faction-brief`, `build-list` y `sync-data`. Encierran los
+procedimientos de arriba y una regla permanente: nunca escribir un valor de
+puntos que no se haya leído de la base de datos.
 
 ## Por qué manda el Munitorum Field Manual
 
