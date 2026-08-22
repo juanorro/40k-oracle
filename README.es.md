@@ -105,6 +105,22 @@ que se les asignan.
 
 Todas las comprobaciones salen del catálogo. Ninguna es una regla escrita a mano.
 
+## Enfrentarte a un rival
+
+```bash
+python3 scripts/analyse.py --threat "chaos space marines"
+python3 scripts/analyse.py --threat "chaos space marines" --attacker "death guard"
+```
+
+El perfil de amenaza toma una línea representativa por franja de resistencia
+—chaff, infantería, élite, monstruo, vehículo pesado— así que cubre lo que una
+facción **puede** plantar, en vez de adivinar una lista. Las armas se ordenan
+por su **peor** bracket, porque una lista que tiene que responder a todo no
+puede permitirse un arma excelente contra un objetivo e inútil contra el resto.
+
+El modelo de daño ignora Feel No Pain, cobertura, estratagemas, repeticiones y
+reglas de ejército. Compara armas entre sí; no predice una partida.
+
 ## Seguir los dataslates
 
 ```bash

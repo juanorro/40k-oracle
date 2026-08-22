@@ -102,6 +102,22 @@ the units they are attached to.
 
 Every check comes from the catalogue data. None are hand-written rules.
 
+## Facing an opponent
+
+```bash
+python3 scripts/analyse.py --threat "chaos space marines"
+python3 scripts/analyse.py --threat "chaos space marines" --attacker "death guard"
+```
+
+The threat profile is one representative statline per toughness band — chaff,
+infantry, elite, monster, heavy vehicle — so it covers what a faction *can*
+field rather than guessing one list. Weapons are then ranked by their **worst**
+bracket, because a list that has to answer anything cannot afford a weapon that
+is excellent against one target and useless against the rest.
+
+The damage model ignores Feel No Pain, cover, stratagems, rerolls and army
+rules. It compares weapons with each other; it does not predict a game.
+
 ## Keeping up with dataslates
 
 ```bash

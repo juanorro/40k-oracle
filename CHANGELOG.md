@@ -29,6 +29,13 @@ All notable changes to this project. Format based on
   every saved list.
 - Skills for agents: `faction-brief`, `build-list`, `sync-data`.
 
+- `scripts/dice.py` and `scripts/combat.py`: dice expressions and an expected
+  damage model covering Torrent, Twin-linked, Sustained Hits, Lethal Hits,
+  Devastating Wounds, Anti-X, Melta, Rapid Fire, Blast, Heavy and Lance, with
+  damage capped per model.
+- `scripts/analyse.py`: threat profile of a faction by toughness band, and
+  weapons ranked by their worst bracket.
+
 ### Notes
 
 - Generated data is no longer tracked in git; see [NOTICE](NOTICE).
