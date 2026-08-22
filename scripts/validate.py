@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Valida una lista de ejército contra los datos extraídos en index.db.
+"""Validate an army list against the data extracted into index.db.
 
-Uso:  python3 scripts/validate.py lists/mi-lista.json
+Usage:  python3 scripts/validate.py lists/my-list.json
 
-Los puntos salen del Munitorum Field Manual oficial. Si una unidad no aparece
-en él se recurre a BSData y se avisa, porque BSData se queda corto en los
-escalones de escuadra grande.
+Points come from the official Munitorum Field Manual. If a unit is not in it,
+BSData is used and a warning is emitted, because BSData falls short on the
+larger squad-size tiers.
 """
 import json
 import re
@@ -21,15 +21,24 @@ def norm(text):
     return re.sub(r"[^a-z0-9]", "", (text or "").lower())
 
 
-def faction_scope(con, faction):
-    """La facción más los catálogos de los que hereda unidades.
+def name_keys(name):
+    """The MFM alternates singular and plural against BSData."""
+    base = norm(name)
+    return (base, base + "s", base.rstrip("s"))
 
-    Un capítulo como Ultramarines tiene 16 unidades propias y el resto las
-    toma del catálogo de Space Marines.
+
+def select_bracket(rows, models):
+    """Pick the cost bracket for `models`, given (models, points) rows sorted asc.
+
+    MFM brackets are ceilings: a unit with more models than its bracket minimum
+    pays the next bracket up. Returns (points, exceeded_max).
     """
-    inherited = [r[0] for r in con.execute(
-        "select inherits_from from catalogue_links where faction=?", (faction,))]
-    return [faction, *inherited]
+    if not rows:
+        return None, False
+    for listed, points in rows:
+        if models <= listed:
+            return points, False
+    return rows[-1][1], True
 
 
 class Report:
@@ -46,16 +55,27 @@ class Report:
         return not self.errors
 
 
-def mfm_cost(con, scope, unit_name, models, copy_index, report):
-    """Coste oficial del ejemplar nº `copy_index` de la unidad.
+def faction_scope(con, faction):
+    """The faction plus the catalogues it inherits units from.
 
-    Los tramos del MFM son techos: con más modelos que el mínimo se paga el
-    escalón siguiente. Las Requisition Thresholds encarecen las copias extra.
+    A chapter such as Ultramarines holds 16 units of its own and takes the rest
+    from the Space Marines catalogue.
+    """
+    inherited = [r[0] for r in con.execute(
+        "select inherits_from from catalogue_links where faction=?", (faction,))]
+    return [faction, *inherited]
+
+
+def mfm_cost(con, scope, unit_name, models, copy_index, report):
+    """Official cost of copy number `copy_index` of the unit.
+
+    Requisition Thresholds make extra copies more expensive, so the copy index
+    selects which price band applies.
     """
     query = ("select models, points from mfm_points where faction=? and unit_norm in (?,?,?) "
              "and copies_from<=? and (copies_to is null or copies_to>=?) order by models")
-    # El MFM alterna singular y plural respecto a BSData.
-    keys = (norm(unit_name), norm(unit_name) + "s", norm(unit_name).rstrip("s"))
+    keys = name_keys(unit_name)
+
     rows = []
     for catalogue in scope:
         rows = con.execute(query, (catalogue, *keys, copy_index, copy_index)).fetchall()
@@ -63,26 +83,25 @@ def mfm_cost(con, scope, unit_name, models, copy_index, report):
             break
 
     if not rows:
-        # Hay unidades que viven en un catalogo y el MFM las tarifa en otro
-        # (capitulos de Marines, Tiranidos, marines de culto). Se acepta el
-        # precio si viene de una sola faccion, y se avisa de cual.
+        # Some units live in one catalogue and the MFM prices them under
+        # another (Marine chapters, Tyranids, cult marines). Accept the price
+        # if it comes from a single faction, and say which.
         elsewhere = con.execute(
-            "select distinct faction from mfm_points where unit_norm in (?,?,?)",
-            keys).fetchall()
+            "select distinct faction from mfm_points where unit_norm in (?,?,?)", keys).fetchall()
         if len(elsewhere) != 1:
             return None
         source = elsewhere[0][0]
         rows = con.execute(query, (source, *keys, copy_index, copy_index)).fetchall()
         if rows:
-            report.warn(f"«{unit_name}»: el MFM lo tarifa bajo {source}.")
+            report.warn(f"'{unit_name}': the MFM prices it under {source}.")
     if not rows:
         return None
-    for listed, points in rows:
-        if models <= listed:
-            return points
-    report.warn(f"«{unit_name}»: {models} modelos supera el máximo del MFM "
-                f"({rows[-1][0]}); se cobra ese escalón.")
-    return rows[-1][1]
+
+    points, exceeded = select_bracket(rows, models)
+    if exceeded:
+        report.warn(f"'{unit_name}': {models} models exceeds the MFM maximum "
+                    f"({rows[-1][0]}); charged at that bracket.")
+    return points
 
 
 def bsdata_cost(con, unit_id, models):
@@ -102,8 +121,8 @@ def resolve_unit(con, scope, name, report):
     near = [r[0] for r in con.execute(
         "select name from units where faction in (%s) and name like ? limit 3"
         % ",".join("?" * len(scope)), (*scope, f"%{name}%"))]
-    hint = f" ¿Quisiste decir {', '.join(near)}?" if near else ""
-    report.error(f"Unidad desconocida en {scope[0]}: «{name}».{hint}")
+    hint = f" Did you mean {', '.join(near)}?" if near else ""
+    report.error(f"Unknown unit in {scope[0]}: '{name}'.{hint}")
     return None
 
 
@@ -116,18 +135,18 @@ def check_detachments(con, scope, names, report):
             f"where faction in ({placeholders}) and name=? collate nocase",
             (*scope, name)).fetchone()
         if row is None:
-            report.error(f"Destacamento desconocido en {scope[0]}: «{name}».")
+            report.error(f"Unknown detachment in {scope[0]}: '{name}'.")
             continue
         det_name, dp, tag = row
         chosen.append(det_name)
         spent += dp or 0
         if tag:
             if tag in tags:
-                report.error(f"«{det_name}» y «{tags[tag]}» comparten la etiqueta "
-                             f"Unique «{tag}»; no puedes llevar los dos.")
+                report.error(f"'{det_name}' and '{tags[tag]}' share the Unique tag "
+                             f"'{tag}'; you cannot take both.")
             tags[tag] = det_name
     if not chosen:
-        report.error("La lista no declara ningún destacamento.")
+        report.error("The list declares no detachment.")
     return chosen, spent
 
 
@@ -138,34 +157,34 @@ def check_enhancement(con, scope, enh, unit_id, unit_name, chosen, report):
         f"where faction in ({placeholders}) and name=? collate nocase",
         (*scope, enh)).fetchall()
     if not rows:
-        report.error(f"Realce desconocido en {scope[0]}: «{enh}».")
+        report.error(f"Unknown enhancement in {scope[0]}: '{enh}'.")
         return 0
     if not con.execute("select 1 from unit_keywords where unit_id=? and keyword='Character'",
                        (unit_id,)).fetchone():
-        report.error(f"«{enh}» va sobre «{unit_name}», que no es Personaje.")
+        report.error(f"'{enh}' is on '{unit_name}', which is not a Character.")
 
     owners = [d for _, d in rows if d]
     if owners and not {norm(o) for o in owners} & {norm(c) for c in chosen}:
-        report.error(f"«{enh}» pertenece a {', '.join(sorted(set(owners)))}, "
-                     f"que no está en la lista.")
+        report.error(f"'{enh}' belongs to {', '.join(sorted(set(owners)))}, "
+                     f"which is not in the list.")
     elif not owners:
-        report.warn(f"«{enh}»: el catálogo no dice a qué destacamento pertenece.")
+        report.warn(f"'{enh}': the catalogue does not say which detachment it belongs to.")
     return rows[0][0] or 0
 
 
 def check_leader(con, leader_name, target, in_list, report):
-    """Comprueba que el líder pueda unirse a esa unidad y que esté en la lista."""
-    keys = (norm(leader_name), norm(leader_name) + "s", norm(leader_name).rstrip("s"))
+    """Check the leader may join that unit and that the unit is in the list."""
     allowed = [r[0] for r in con.execute(
-        "select distinct attach_to from leaders where leader_norm in (?,?,?)", keys)]
+        "select distinct attach_to from leaders where leader_norm in (?,?,?)",
+        name_keys(leader_name))]
     if not allowed:
-        report.warn(f"«{leader_name}»: el MFM no lo lista como Leader/Support, "
-                    f"no se comprueba a qué se une.")
+        report.warn(f"'{leader_name}': not listed as Leader/Support in the MFM, "
+                    f"attachment not checked.")
     elif norm(target) not in {norm(a) for a in allowed}:
-        report.error(f"«{leader_name}» no puede unirse a «{target}». "
-                     f"Puede unirse a: {', '.join(sorted(allowed))}.")
+        report.error(f"'{leader_name}' cannot join '{target}'. "
+                     f"It can join: {', '.join(sorted(allowed))}.")
     if norm(target) not in in_list:
-        report.error(f"«{leader_name}» se une a «{target}», que no está en la lista.")
+        report.error(f"'{leader_name}' joins '{target}', which is not in the list.")
 
 
 def validate(path):
@@ -178,8 +197,8 @@ def validate(path):
         (army.get("battle_size"),)).fetchone()
     if size is None:
         options = [r[0] for r in con.execute("select name from battle_sizes")]
-        report.error(f"Tamaño de partida desconocido: «{army.get('battle_size')}». "
-                     f"Disponibles: {', '.join(options)}.")
+        report.error(f"Unknown battle size: '{army.get('battle_size')}'. "
+                     f"Available: {', '.join(options)}.")
         return report, None
     size_name, pts_limit, dp_budget, enh_cap = size
     faction = army.get("faction")
@@ -187,7 +206,7 @@ def validate(path):
     scope = faction_scope(con, faction)
     chosen, dp_spent = check_detachments(con, scope, army.get("detachments"), report)
     if dp_spent > dp_budget:
-        report.error(f"Destacamentos: {dp_spent} DP sobre un presupuesto de {dp_budget}.")
+        report.error(f"Detachments: {dp_spent} DP against a budget of {dp_budget}.")
 
     in_list = {norm(u.get("name")) for u in army.get("units") or []}
     total, seen, characters, enh_used = 0, {}, 0, 0
@@ -208,11 +227,11 @@ def validate(path):
         if cost is None:
             cost = bsdata_cost(con, unit_id, models)
             if cost is None:
-                report.warn(f"«{unit_name}»: sin puntos en ninguna fuente, no suma.")
+                report.warn(f"'{unit_name}': no points in any source, not counted.")
                 cost = 0
             else:
-                report.warn(f"«{unit_name}»: no está en el MFM, se usa BSData "
-                            f"({cost} pts), que puede quedarse corto.")
+                report.warn(f"'{unit_name}': not in the MFM, using BSData "
+                            f"({cost} pts), which may be too low.")
         total += cost
 
         if con.execute("select 1 from unit_keywords where unit_id=? and keyword='Character'",
@@ -227,16 +246,16 @@ def validate(path):
         cap = con.execute("select max_in_army from units where faction=? and name=?",
                           (resolved[name], name)).fetchone()
         if cap and cap[0] and count > cap[0]:
-            report.error(f"«{name}» aparece {count} veces; el máximo es {cap[0]}.")
+            report.error(f"'{name}' appears {count} times; the maximum is {cap[0]}.")
 
     if characters == 0:
-        # El force entry 'Army Roster' del sistema exige min 1 Character.
-        report.error("La lista no lleva ningún Personaje y el reglamento exige al menos uno.")
+        # The system's 'Army Roster' force entry requires min 1 Character.
+        report.error("The list has no Character; the rules require at least one.")
     if enh_used > enh_cap:
-        report.error(f"Realces: {enh_used} usados, el máximo en {size_name} es {enh_cap}.")
+        report.error(f"Enhancements: {enh_used} used, the maximum at {size_name} is {enh_cap}.")
     if total > pts_limit:
-        report.error(f"Puntos: {total} sobre un límite de {pts_limit} "
-                     f"({total - pts_limit} de más).")
+        report.error(f"Points: {total} against a limit of {pts_limit} "
+                     f"({total - pts_limit} over).")
 
     version = con.execute("select version, updated from mfm_meta").fetchone()
     con.close()
@@ -247,22 +266,22 @@ def validate(path):
 
 def main():
     if len(sys.argv) != 2:
-        sys.exit("Uso: python3 scripts/validate.py <lista.json>")
+        sys.exit("Usage: python3 scripts/validate.py <list.json>")
     if not DB.exists():
-        sys.exit("Falta index.db. Ejecuta primero python3 scripts/build.py")
+        sys.exit("index.db missing. Run python3 scripts/build.py first.")
 
     report, totals = validate(sys.argv[1])
     if totals:
         version, updated = totals["mfm"] or ("?", "?")
-        print(f"Puntos {totals['total']}/{totals['limit']} | "
-              f"Destacamento {totals['dp']}/{totals['dp_budget']} | "
-              f"Realces {totals['enh']}/{totals['enh_cap']}   "
+        print(f"Points {totals['total']}/{totals['limit']} | "
+              f"Detachment {totals['dp']}/{totals['dp_budget']} | "
+              f"Enhancements {totals['enh']}/{totals['enh_cap']}   "
               f"[MFM v{version}, {updated}]\n")
     for msg in report.warnings:
-        print(f"  aviso  {msg}")
+        print(f"  warning  {msg}")
     for msg in report.errors:
-        print(f"  ERROR  {msg}")
-    print("\nLista legal." if report.ok() else f"\n{len(report.errors)} problema(s).")
+        print(f"  ERROR    {msg}")
+    print("\nList is legal." if report.ok() else f"\n{len(report.errors)} problem(s).")
     sys.exit(0 if report.ok() else 1)
 
 

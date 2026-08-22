@@ -1,0 +1,40 @@
+40k-oracle — notice on intellectual property
+============================================
+
+The MIT licence covers the CODE in this repository. It does not, and cannot,
+cover the game data the code processes.
+
+Unofficial and unaffiliated
+---------------------------
+
+Warhammer 40,000, the Warhammer 40,000 logo, Games Workshop, Citadel and all
+associated names, characters, factions, units and imagery are trademarks or
+registered trademarks of Games Workshop Limited. This project is unofficial,
+is not endorsed by Games Workshop, and is not affiliated with Games Workshop
+or with BattleScribe.
+
+No game data is distributed here
+--------------------------------
+
+This repository contains no unit data, points values, characteristics or rules
+text. `sources/` and `data/` are deliberately not tracked in git, and never
+have been.
+
+The dataset is built on YOUR machine, from third-party sources you download
+yourself, and stays there:
+
+  - BSData/wh40k-11e      — community-maintained catalogues
+  - BSData/wh40k-11e-mfm  — mirror of the official Munitorum Field Manual
+
+Both are community projects, independent of Games Workshop.
+
+Facts, not rules text
+---------------------
+
+The extraction is deliberately limited to factual data: names, numeric
+characteristics, points costs, keywords and the structure of build options.
+Rules text is not extracted. For abilities, stratagems and detachment rules
+only the NAME is kept, as a pointer back to the official publication.
+
+If you contribute, keep it that way. A pull request that ingests rules text
+will not be merged.

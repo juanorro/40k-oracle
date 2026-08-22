@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Extrae datos estructurados de los catálogos BSData 11e a data/*.json e index.db.
+"""Extract structured data from the BSData 11e catalogues into data/ and index.db.
 
-Frontera deliberada: se extraen HECHOS (nombres, perfiles numéricos, puntos,
-keywords, estructura de wargear). No se extrae el texto de las reglas: de las
-habilidades se guarda solo el nombre, como referencia.
+Deliberate boundary: FACTS are extracted (names, numeric profiles, points,
+keywords, wargear structure). Rules text is not: for abilities only the name is
+kept, as a pointer back to the source.
 """
 import json
 import re
@@ -22,8 +22,8 @@ WEAPON_TYPES = {"Ranged Weapons", "Melee Weapons"}
 CHILD_KEYS = ("sharedSelectionEntries", "selectionEntries",
               "sharedSelectionEntryGroups", "selectionEntryGroups")
 
-# Perfiles declarados una vez y referenciados por infoLink desde muchas
-# entradas. Se rellena en main() con todos los catalogos.
+# Profiles declared once and referenced by infoLink from many entries.
+# Populated in main() from every catalogue.
 SHARED_PROFILES = {}
 
 
@@ -33,7 +33,7 @@ def slugify(text):
 
 
 def walk(node):
-    """Recorre todas las entradas anidadas de un nodo."""
+    """Walk every nested entry of a node."""
     for key in CHILD_KEYS:
         for entry in node.get(key) or []:
             yield entry
@@ -47,11 +47,11 @@ def all_modifiers(entry):
 
 
 def points_tiers(entry, pts_type_id, depth=0):
-    """Puntos base y por tamaño de unidad (los modifiers 'set' sobre el coste)."""
+    """Base points plus per-squad-size tiers (the 'set' modifiers on the cost)."""
     base = next((c.get("value") for c in entry.get("costs") or []
                  if c.get("name") == "pts"), None)
     if base is None:
-        # Algunas unidades declaran el coste en el modelo hijo, no en el padre.
+        # Some units declare the cost on the child model, not on the parent.
         if depth < 2:
             for child in entry.get("selectionEntries") or []:
                 if child.get("type") == "model":
@@ -75,12 +75,11 @@ def characteristics(profile):
 
 
 def unit_profiles(entry, depth=0, seen=None):
-    """Linea de caracteristicas de la unidad.
+    """The unit's characteristic line.
 
-    Algunas unidades no la llevan en la entrada padre sino en el modelo hijo,
-    Puede estar en la propia entrada, referenciada por infoLink a un perfil
-    compartido, o colgando del modelo hijo. Se buscan las tres, sin seguir
-    entryLinks para no arrastrar perfiles de otras unidades.
+    It may sit on the entry itself, be referenced by infoLink to a shared
+    profile, or hang off the child model. All three are searched, without
+    following entryLinks so profiles of other units are not dragged in.
     """
     if seen is None:
         seen = set()
@@ -103,7 +102,7 @@ def unit_profiles(entry, depth=0, seen=None):
 
 
 def collect_subtree(entry, id_map, seen=None, depth=0):
-    """Entradas del subárbol de una unidad, resolviendo entryLinks."""
+    """Entries in a unit's subtree, resolving entryLinks."""
     if seen is None:
         seen = set()
     key = id(entry)
@@ -142,7 +141,7 @@ def weapons_of(entry, id_map):
 
 
 def ability_names(entry, id_map):
-    """Solo nombres. El texto de la regla se queda en la fuente."""
+    """Names only. The rules text stays in the source."""
     names = []
     for node in collect_subtree(entry, id_map):
         for link in node.get("infoLinks") or []:
@@ -157,7 +156,7 @@ def keywords_of(entry):
 
 
 def entries_with_parent(node):
-    """Cada entrada anidada junto al contenedor directo que la declara."""
+    """Each nested entry together with the container that declares it."""
     for key in CHILD_KEYS:
         for child in node.get(key) or []:
             yield child, node
@@ -170,7 +169,7 @@ def cost_named(entry, name):
 
 
 def condition_child_ids(node):
-    """Condiciones de un modifier, incluidas las de grupos anidados."""
+    """A modifier's conditions, including those in nested groups."""
     for cond in node.get("conditions") or []:
         yield cond
     for group in node.get("conditionGroups") or []:
@@ -178,7 +177,7 @@ def condition_child_ids(node):
 
 
 def army_cap(entry):
-    """Cuantas veces puede repetirse la unidad en el ejercito."""
+    """How many times the unit may be repeated in the army."""
     for con in entry.get("constraints") or []:
         if (con.get("type") == "max" and con.get("field") == "selections"
                 and con.get("scope") in ("force", "roster")):
@@ -187,9 +186,9 @@ def army_cap(entry):
 
 
 def condition_holds(cond, chosen_id):
-    """Evalua una condicion suponiendo que solo esta elegido `chosen_id`."""
+    """Evaluate a condition assuming only `chosen_id` is selected."""
     if cond.get("field") != "selections":
-        return True          # no depende del tamano de partida
+        return True          # does not depend on the battle size
     count = 1 if cond.get("childId") == chosen_id else 0
     value = cond.get("value") or 0
     return {
@@ -203,7 +202,7 @@ def condition_holds(cond, chosen_id):
 
 
 def conditions_hold(node, chosen_id, operator="and"):
-    """Evalua el arbol de condiciones respetando los and/or de cada grupo."""
+    """Evaluate the condition tree, honouring each group's and/or."""
     results = [condition_holds(c, chosen_id) for c in node.get("conditions") or []]
     results += [conditions_hold(g, chosen_id, g.get("type", "and"))
                 for g in node.get("conditionGroups") or []]
@@ -213,10 +212,10 @@ def conditions_hold(node, chosen_id, operator="and"):
 
 
 def repeat_count(modifier, chosen_id):
-    """Veces que se aplica un modifier con bloque `repeats`.
+    """How many times a modifier with a `repeats` block applies.
 
-    Suponiendo que solo esta elegido el tamano de partida, cualquier `repeats`
-    que cuente otra cosa da cero y el modifier no llega a aplicarse.
+    Assuming only the battle size is selected, any `repeats` counting anything
+    else yields zero and the modifier never applies.
     """
     repeats = modifier.get("repeats") or []
     if not repeats:
@@ -229,11 +228,11 @@ def repeat_count(modifier, chosen_id):
 
 
 def battle_sizes(gs):
-    """Limites de puntos, destacamentos y realces segun el tamano de partida.
+    """Points, detachment and enhancement limits per battle size.
 
-    El sistema declara un limite base en el 'Army Roster' y lo reescribe con
-    modifiers condicionados al Battle Size. Las condiciones forman un arbol
-    and/or que hay que evaluar entero: aplanarlo da limites equivocados.
+    The system declares a base limit on the 'Army Roster' and rewrites it with
+    modifiers conditioned on the Battle Size. Those conditions form an and/or
+    tree that must be evaluated whole: flattening it yields wrong limits.
     """
     entry = next((e for e in gs.get("sharedSelectionEntries") or []
                   if e.get("name") == "Battle Size"), None)
@@ -256,7 +255,7 @@ def battle_sizes(gs):
     sizes = []
     for oid, name in options.items():
         values = {key: base for key, base in limits.values()}
-        # En orden de documento, como los aplica BattleScribe.
+        # In document order, the way BattleScribe applies them.
         for mod in force.get("modifiers") or []:
             if mod.get("field") not in limits or not conditions_hold(mod, oid):
                 continue
@@ -275,7 +274,7 @@ def battle_sizes(gs):
 
 
 def merge_sources(bsdata_rows, mfm_rows, mfm_only_keys):
-    """Fusiona por faccion + nombre normalizado. El MFM sobrescribe."""
+    """Merge on faction + normalised name. The MFM wins."""
     merged = {}
     for row in bsdata_rows:
         key = (row["faction"], mfm.norm(row["name"]))
@@ -287,7 +286,7 @@ def merge_sources(bsdata_rows, mfm_rows, mfm_only_keys):
 
 
 def merge_enhancements(bsdata_rows, mfm_rows):
-    """Una fila por realce y destacamento. El MFM manda en puntos y vinculo."""
+    """One row per enhancement and detachment. The MFM wins on points and link."""
     merged = {}
     for row in bsdata_rows:
         for det in row["detachments"] or [None]:
@@ -302,22 +301,22 @@ def merge_enhancements(bsdata_rows, mfm_rows):
 
 def main():
     if not SRC.is_dir():
-        sys.exit("No hay fuentes. Ejecuta primero scripts/sync-sources.sh")
+        sys.exit("No sources. Run scripts/sync-sources.sh first.")
 
     catalogues, roots = [], []
     for path in sorted(SRC.glob("*.json")):
         with path.open() as fh:
             doc = json.load(fh)
-        # El fichero del sistema de juego aporta entradas compartidas para
-        # resolver enlaces, pero no es una faccion.
+        # The game system file contributes shared entries used to resolve
+        # links, but it is not a faction.
         if "catalogue" in doc:
             catalogues.append(doc["catalogue"])
             roots.append(doc["catalogue"])
         elif "gameSystem" in doc:
             roots.append(doc["gameSystem"])
 
-    # Un catalogo de capitulo (Ultramarines) declara de que otros hereda
-    # unidades. Sin esto, sus listas no resuelven.
+    # A chapter catalogue (Ultramarines) declares which others it inherits
+    # units from. Without this its lists do not resolve.
     catalogue_by_id = {r["id"]: r["name"] for r in roots}
     links = []
     for cat in catalogues:
@@ -357,8 +356,8 @@ def main():
     all_detachments, all_enhancements = [], []
     detachment_names = {}
 
-    # Un destacamento es lo que cuesta Detachment Points; un realce, lo que
-    # cuesta Enhancements. Es el discriminador mas estable de la fuente.
+    # A detachment is whatever costs Detachment Points; an enhancement,
+    # whatever costs Enhancements. The most stable discriminator available.
     for cat in catalogues:
         for entry, _ in entries_with_parent(cat):
             if (cost_named(entry, "Detachment Points") or 0) >= 1:
@@ -372,9 +371,8 @@ def main():
 
     for cat in catalogues:
         units = []
-        # Solo entradas de nivel superior: un 'model' anidado es un miembro de
-        # escuadra, mientras que uno de nivel superior es una unidad de un solo
-        # modelo (personaje, vehiculo, monstruo).
+        # Top-level entries only: a nested 'model' is a squad member, while a
+        # top-level one is a single-model unit (character, vehicle, monster).
         top_level = (cat.get("sharedSelectionEntries") or []) + (cat.get("selectionEntries") or [])
         for entry in top_level:
             if entry.get("type") not in ("unit", "model") or entry.get("hidden"):
@@ -384,9 +382,9 @@ def main():
                 all_weapons[weapon["id"]] = weapon
             profiles = unit_profiles(entry)
             tiers = points_tiers(entry, pts_type_id)
-            # Sin coste y sin linea de caracteristicas no es una unidad
-            # seleccionable, sino un componente reutilizable de escuadra
-            # (p.ej. "Wolf Scout", "Burna Boy") publicado en el nivel superior.
+            # With no cost and no characteristic line this is not a selectable
+            # unit but a reusable squad component (e.g. "Wolf Scout",
+            # "Burna Boy") published at the top level.
             if not profiles and not tiers:
                 continue
             units.append({
@@ -415,11 +413,11 @@ def main():
             out = DATA / "units" / f"{slugify(cat['name'])}.json"
             out.write_text(json.dumps(units, indent=1, ensure_ascii=False) + "\n")
 
-    # Los realces cuelgan de un grupo que se oculta salvo que este elegido su
-    # destacamento; esas condiciones son el vinculo entre ambos.
-    # Un mismo realce aparece bajo cada personaje que puede llevarlo, y cada
-    # aparicion esta condicionada a un destacamento distinto, asi que hay que
-    # acumular los vinculos de todas ellas en vez de quedarse con la primera.
+    # Enhancements hang off a group hidden unless its detachment is selected;
+    # those conditions are the link between the two. The same enhancement
+    # appears under every character that may take it, each occurrence gated on a
+    # different detachment, so links must be accumulated across all of them
+    # rather than taking the first.
     by_id = {}
     for cat in catalogues:
         for entry, parent in entries_with_parent(cat):
@@ -432,7 +430,7 @@ def main():
                 "points": cost_named(entry, "pts"),
                 "detachments": set(),
             })
-            # El gating puede estar en el grupo contenedor o en el propio realce.
+            # The gating may sit on the containing group or on the enhancement.
             for mod in (entry.get("modifiers") or []) + (parent.get("modifiers") or []):
                 if mod.get("field") != "hidden":
                     continue
@@ -457,8 +455,8 @@ def main():
         json.dumps(sorted(all_weapons.values(), key=lambda w: w["name"] or ""),
                    indent=1, ensure_ascii=False) + "\n")
 
-    # El MFM oficial manda sobre BSData en puntos, destacamentos y realces.
-    # Lo que solo existe en BSData se conserva, marcado como tal.
+    # The official MFM overrides BSData on points, detachments and
+    # enhancements. What exists only in BSData is kept, flagged as such.
     catalogue_sizes = {f["name"]: f["unit_count"] for f in factions}
     mfm_points, mfm_dets, mfm_enh, mfm_leaders, mfm_meta = mfm.load(catalogue_sizes)
 
@@ -477,14 +475,14 @@ def main():
 
     build_db(factions, all_units, all_weapons, all_detachments,
              all_enhancements, sizes, mfm_points, mfm_leaders, mfm_meta, links)
-    print(f"{len(factions)} catálogos | {len(all_units)} unidades | "
-          f"{len(all_weapons)} perfiles de arma")
-    print(f"{len(all_detachments)} destacamentos | {len(all_enhancements)} realces | "
-          f"{len(sizes)} tamaños de partida")
+    print(f"{len(factions)} catalogues | {len(all_units)} units | "
+          f"{len(all_weapons)} weapon profiles")
+    print(f"{len(all_detachments)} detachments | {len(all_enhancements)} enhancements | "
+          f"{len(sizes)} battle sizes")
     print(f"MFM v{mfm_meta.get('version')} ({mfm_meta.get('updated')}): "
-          f"{len(mfm_points)} costes | {len(mfm_leaders)} adscripciones de líder")
-    print(f"{len(links)} herencias entre catálogos")
-    print(f"data/ y {DB.name} regenerados")
+          f"{len(mfm_points)} costs | {len(mfm_leaders)} leader attachments")
+    print(f"{len(links)} catalogue inheritance links")
+    print(f"data/ and {DB.name} rebuilt")
 
 
 def build_db(factions, units, weapons, detachments, enhancements, sizes,

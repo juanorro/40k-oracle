@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  schedule:
+    # Weekly, to catch upstream data changes before they bite.
+    - cron: "0 6 * * 1"
+
+jobs:
+  tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -r requirements.txt
+      - run: python -m unittest discover -s tests -v
+
+  build:
+    name: Full build against live sources
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Download sources
+        run: ./scripts/sync-sources.sh
+      - name: Build the dataset
+        run: python scripts/build.py
+      - name: Validate the example list
+        run: python scripts/validate.py lists/example-death-guard.json
+      - name: Integration tests
+        run: python -m unittest discover -s tests -v

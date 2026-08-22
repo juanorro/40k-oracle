@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Lectura del Munitorum Field Manual oficial (snapshots de BSData/wh40k-11e-mfm).
+"""Reader for the official Munitorum Field Manual (BSData/wh40k-11e-mfm snapshots).
 
-El MFM es la fuente autoritativa de puntos: BSData se queda corto en los
-escalones de escuadra grande. De aquí salen también las Requisition Thresholds,
-las etiquetas Unique de destacamento y las adscripciones Leader/Support, que
-BSData no modela.
+The MFM is the authoritative source of points: BSData falls short on the larger
+squad-size tiers. Requisition Thresholds, detachment Unique tags and
+Leader/Support attachments also come from here — BSData does not model them.
 """
 import re
 from pathlib import Path
@@ -13,7 +12,7 @@ import yaml
 
 MFM_DIR = Path(__file__).resolve().parent.parent / "sources" / "wh40k-11e-mfm" / "data"
 
-# El MFM nombra las facciones de forma más corta que los catálogos de BSData.
+# The MFM names factions more tersely than the BSData catalogues.
 FACTION_ALIASES = {
     "Aeldari": "Aeldari - Aeldari Library",
     "Drukhari": "Aeldari - Aeldari Library",
@@ -32,7 +31,7 @@ def norm(text):
 
 
 def parse_range(text):
-    """'[1,)' -> (1, None); '[1,2]' -> (1, 2). Es el nº de copias en el ejército."""
+    """'[1,)' -> (1, None); '[1,2]' -> (1, 2). Counts copies in the army."""
     match = re.match(r"[\[(](\d+),\s*(\d*)[\])]", text or "")
     if not match:
         return 1, None
@@ -41,11 +40,11 @@ def parse_range(text):
 
 
 def match_faction(mfm_name, catalogues):
-    """`catalogues` es {nombre de catalogo: numero de unidades}.
+    """`catalogues` is {catalogue name: unit count}.
 
-    Varios catalogos pueden acabar igual ('Library - Tyranids' y
-    'Xenos - Tyranids'), asi que se elige el que mas unidades tiene, que es
-    donde de verdad viven.
+    Several catalogues can share a suffix ('Library - Tyranids' and
+    'Xenos - Tyranids'), so the one holding the most units wins — that is where
+    they actually live.
     """
     if mfm_name in FACTION_ALIASES:
         return FACTION_ALIASES[mfm_name]
@@ -55,7 +54,7 @@ def match_faction(mfm_name, catalogues):
 
 
 def load(catalogues):
-    """Devuelve (puntos, destacamentos, realces, líderes, meta)."""
+    """Return (points, detachments, enhancements, leaders, meta)."""
     points, detachments, enhancements, leaders = [], [], [], []
     meta = {}
     if not MFM_DIR.is_dir():
