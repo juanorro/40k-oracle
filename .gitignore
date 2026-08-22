@@ -1,4 +1,13 @@
+# Third-party source data, downloaded by scripts/sync-sources.sh
 sources/
+
+# Generated artefacts — rebuild with scripts/build.py
+data/
 index.db
-.DS_Store
+
+# Python
 __pycache__/
+*.pyc
+.venv/
+
+.DS_Store
