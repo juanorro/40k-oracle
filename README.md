@@ -41,14 +41,9 @@ Huecos conocidos:
 - El MFM cubre el 95% de las unidades de juego normal. El resto usa puntos de
   BSData y el validador lo avisa. Las unidades `[Legends]` y `[Crucible]` no
   están en el MFM por diseño.
-- Las facciones de capítulo (Ultramarines, Imperial Fists…) tienen su propio
-  catálogo pero la mayoría de sus unidades viven en el de Space Marines, y
-  todavía no se resuelven entre catálogos: una lista de capítulo no valida bien.
 - 8 unidades sin línea de características (0,5%).
 
-Todavía no se extraen las estratagemas ni las reglas de destacamento, y el
-validador no comprueba aún las adscripciones Leader/Support, cuyos datos ya
-están en la tabla `leaders`.
+Todavía no se extraen las estratagemas ni las reglas de destacamento.
 
 ## Estructura
 

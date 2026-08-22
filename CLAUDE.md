@@ -43,6 +43,7 @@ Esquema de `index.db`:
 - `mfm_points(faction, unit, unit_norm, copies_from, copies_to, models, points)` — **puntos oficiales**
 - `leaders(faction, leader, leader_norm, attach_to, attach_to_norm)` — a qué unidad puede unirse cada líder
 - `mfm_meta(version, updated)` — versión del Munitorum Field Manual cargada
+- `catalogue_links(faction, inherits_from)` — de qué catálogos hereda unidades cada facción
 
 ### De dónde salen los puntos
 
@@ -94,7 +95,12 @@ unidad lleva `name`, opcionalmente `models` y `enhancement`. Ver
 Comprueba límite de puntos (con umbrales de requisición), presupuesto de
 destacamento, etiquetas Unique en conflicto, tope de realces, que cada realce
 corresponda a un destacamento elegido y vaya sobre un Personaje, el máximo de
-repeticiones por unidad y que haya al menos un Personaje.
+repeticiones por unidad, que haya al menos un Personaje y que los líderes se
+unan a unidades permitidas.
+
+Las facciones de capítulo heredan unidades de su catálogo padre: Ultramarines
+tiene 16 unidades propias y el resto salen de Space Marines. La resolución sigue
+`catalogue_links` automáticamente.
 
 Todas las comprobaciones salen del catálogo, no de reglas escritas a mano.
 

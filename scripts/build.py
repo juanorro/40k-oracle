@@ -316,6 +316,16 @@ def main():
         elif "gameSystem" in doc:
             roots.append(doc["gameSystem"])
 
+    # Un catalogo de capitulo (Ultramarines) declara de que otros hereda
+    # unidades. Sin esto, sus listas no resuelven.
+    catalogue_by_id = {r["id"]: r["name"] for r in roots}
+    links = []
+    for cat in catalogues:
+        for link in cat.get("catalogueLinks") or []:
+            target = catalogue_by_id.get(link.get("targetId"))
+            if target and target != cat["name"]:
+                links.append({"faction": cat["name"], "inherits_from": target})
+
     for root in roots:
         for prof in root.get("sharedProfiles") or []:
             SHARED_PROFILES[prof["id"]] = prof
@@ -462,20 +472,23 @@ def main():
         json.dumps(all_enhancements, indent=1, ensure_ascii=False) + "\n")
     (DATA / "points.json").write_text(
         json.dumps(mfm_points, indent=1, ensure_ascii=False) + "\n")
+    (DATA / "catalogue_links.json").write_text(
+        json.dumps(links, indent=1, ensure_ascii=False) + "\n")
 
     build_db(factions, all_units, all_weapons, all_detachments,
-             all_enhancements, sizes, mfm_points, mfm_leaders, mfm_meta)
+             all_enhancements, sizes, mfm_points, mfm_leaders, mfm_meta, links)
     print(f"{len(factions)} catálogos | {len(all_units)} unidades | "
           f"{len(all_weapons)} perfiles de arma")
     print(f"{len(all_detachments)} destacamentos | {len(all_enhancements)} realces | "
           f"{len(sizes)} tamaños de partida")
     print(f"MFM v{mfm_meta.get('version')} ({mfm_meta.get('updated')}): "
           f"{len(mfm_points)} costes | {len(mfm_leaders)} adscripciones de líder")
+    print(f"{len(links)} herencias entre catálogos")
     print(f"data/ y {DB.name} regenerados")
 
 
 def build_db(factions, units, weapons, detachments, enhancements, sizes,
-             mfm_points, mfm_leaders, mfm_meta):
+             mfm_points, mfm_leaders, mfm_meta, links):
     DB.unlink(missing_ok=True)
     con = sqlite3.connect(DB)
     con.executescript("""
@@ -492,6 +505,7 @@ def build_db(factions, units, weapons, detachments, enhancements, sizes,
       create table leaders (faction text, leader text, leader_norm text,
                             attach_to text, attach_to_norm text);
       create table mfm_meta (version text, updated text);
+      create table catalogue_links (faction text, inherits_from text);
       create table unit_profiles (unit_id text, name text, m text, t text, sv text,
                                   w text, ld text, oc text, invuln text);
       create table unit_points (unit_id text, min_models int, pts int);
@@ -526,6 +540,8 @@ def build_db(factions, units, weapons, detachments, enhancements, sizes,
                       l["attach_to_norm"]) for l in mfm_leaders])
     con.execute("insert into mfm_meta values (?,?)",
                 (mfm_meta.get("version"), mfm_meta.get("updated")))
+    con.executemany("insert into catalogue_links values (?,?)",
+                    [(l["faction"], l["inherits_from"]) for l in links])
     con.executemany("insert into unit_profiles values (?,?,?,?,?,?,?,?,?)",
                     [(u["id"], p.get("name"), p.get("M"), p.get("T"), p.get("Sv"),
                       p.get("W"), p.get("LD"), p.get("OC"), p.get("InSv"))
@@ -551,6 +567,7 @@ def build_db(factions, units, weapons, detachments, enhancements, sizes,
       create index detachments_idx on detachments(faction, name);
       create index enhancements_idx on enhancements(faction, name);
       create index leaders_idx on leaders(faction, attach_to_norm);
+      create index catalogue_links_idx on catalogue_links(faction);
     """)
     con.commit()
     con.close()
