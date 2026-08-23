@@ -1,0 +1,10 @@
+[
+  { "faction": "Death Guard", "unit": "Typhus",                  "models": 1 },
+  { "faction": "Death Guard", "unit": "Lord of Poxes",           "models": 1 },
+  { "faction": "Death Guard", "unit": "Plague Marines",          "models": 14,
+    "wargear": ["2x plasma gun", "1x blight launcher"],
+    "acquired": "2026-03-11" },
+  { "faction": "Death Guard", "unit": "Deathshroud Terminators", "models": 3 },
+  { "faction": "Death Guard", "unit": "Myphitic Blight-hauler",  "models": 1 },
+  { "faction": "Death Guard", "unit": "Nurglings",               "models": 6 }
+]

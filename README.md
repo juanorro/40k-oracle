@@ -140,6 +140,21 @@ from having no answer at all.
 Melee assumes contact, so that column is a ceiling; it is not comparable with
 ranged.
 
+## Your collection
+
+```bash
+python3 scripts/collection.py                        # what you own
+python3 scripts/collection.py --check lists/my-list.json
+```
+
+`--check` totals every model a list needs, including a unit taken twice, and
+reports the shortfall per unit. It exits non-zero when anything is missing, so
+it can gate a build.
+
+`collection/collection.json` is yours and is not tracked in git; see
+`collection/example-collection.json` for the shape. Paint status is
+deliberately not tracked.
+
 ## Keeping up with dataslates
 
 ```bash
@@ -154,7 +169,7 @@ revalidates every list in `lists/` and tells you which ones broke.
 ## Skills
 
 `.claude/skills/` ships three skills for agents working in this repository:
-`faction-brief`, `build-list`, `review-list` and `sync-data`. They encode the procedures above
+`faction-brief`, `build-list`, `review-list`, `collection` and `sync-data`. They encode the procedures above
 and one standing rule: never write a points value that was not read from the
 database.
 

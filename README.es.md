@@ -144,6 +144,21 @@ una franja entera es un problema distinto de no tener respuesta.
 El melé asume contacto, así que esa columna es un techo y no es comparable con
 el disparo.
 
+## Tu colección
+
+```bash
+python3 scripts/collection.py                        # lo que tienes
+python3 scripts/collection.py --check lists/mi-lista.json
+```
+
+`--check` suma todos los modelos que una lista necesita, incluida una unidad
+repetida, e informa de lo que falta por unidad. Sale con código distinto de cero
+si falta algo, así que puede cortar una construcción.
+
+`collection/collection.json` es tuyo y no se versiona; mira
+`collection/example-collection.json` para ver la forma. El estado de pintado no
+se registra a propósito.
+
 ## Seguir los dataslates
 
 ```bash
@@ -159,7 +174,7 @@ se han roto.
 ## Skills
 
 `.claude/skills/` incluye tres skills para agentes que trabajen en este
-repositorio: `faction-brief`, `build-list`, `review-list` y `sync-data`. Encierran los
+repositorio: `faction-brief`, `build-list`, `review-list`, `collection` y `sync-data`. Encierran los
 procedimientos de arriba y una regla permanente: nunca escribir un valor de
 puntos que no se haya leído de la base de datos.
 

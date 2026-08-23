@@ -42,6 +42,9 @@ All notable changes to this project. Format based on
 - `scripts/review.py` and the `review-list` skill: threat-band coverage of a
   saved list, flagging thin bands and naming what currently covers them.
 
+- `scripts/collection.py` and the `collection` skill: record which miniatures
+  are owned and report what a list still needs bought.
+
 ### Notes
 
 - Generated data is no longer tracked in git; see [NOTICE](NOTICE).
