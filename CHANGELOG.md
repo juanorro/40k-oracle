@@ -39,6 +39,9 @@ All notable changes to this project. Format based on
 - Default loadouts taken from BSData's declared defaults, covering 88% of
   playable units, so `analyse.py --units` can score whole units per 100 points.
 
+- `scripts/review.py` and the `review-list` skill: threat-band coverage of a
+  saved list, flagging thin bands and naming what currently covers them.
+
 ### Notes
 
 - Generated data is no longer tracked in git; see [NOTICE](NOTICE).

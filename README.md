@@ -125,6 +125,21 @@ The damage model ignores Feel No Pain, cover, stratagems, rerolls and army
 rules, and unit scoring also ignores durability and objective control. It
 compares entries with each other; it does not predict a game.
 
+## Reviewing a list
+
+```bash
+python3 scripts/review.py lists/my-list.json --vs "chaos space marines"
+```
+
+Reports models, wounds and objective control, then expected damage per threat
+band. Any band under a third of the strongest is flagged **thin**, along with
+the units currently doing that work — which usually matters more than the gap
+itself, since one fragile unit carrying a whole band is a different problem
+from having no answer at all.
+
+Melee assumes contact, so that column is a ceiling; it is not comparable with
+ranged.
+
 ## Keeping up with dataslates
 
 ```bash
@@ -139,7 +154,7 @@ revalidates every list in `lists/` and tells you which ones broke.
 ## Skills
 
 `.claude/skills/` ships three skills for agents working in this repository:
-`faction-brief`, `build-list` and `sync-data`. They encode the procedures above
+`faction-brief`, `build-list`, `review-list` and `sync-data`. They encode the procedures above
 and one standing rule: never write a points value that was not read from the
 database.
 

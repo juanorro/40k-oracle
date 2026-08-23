@@ -129,6 +129,21 @@ El modelo de daño ignora Feel No Pain, cobertura, estratagemas, repeticiones y
 reglas de ejército, y la puntuación por unidad ignora además durabilidad y
 control de objetivo. Compara entradas entre sí; no predice una partida.
 
+## Revisar una lista
+
+```bash
+python3 scripts/review.py lists/mi-lista.json --vs "chaos space marines"
+```
+
+Informa de modelos, heridas y control de objetivo, y del daño esperado por
+franja de amenaza. Marca como **thin** cualquier franja por debajo de un tercio
+de la más fuerte, y nombra las unidades que están haciendo ese trabajo — que
+suele importar más que el hueco en sí, porque una sola unidad frágil cubriendo
+una franja entera es un problema distinto de no tener respuesta.
+
+El melé asume contacto, así que esa columna es un techo y no es comparable con
+el disparo.
+
 ## Seguir los dataslates
 
 ```bash
@@ -144,7 +159,7 @@ se han roto.
 ## Skills
 
 `.claude/skills/` incluye tres skills para agentes que trabajen en este
-repositorio: `faction-brief`, `build-list` y `sync-data`. Encierran los
+repositorio: `faction-brief`, `build-list`, `review-list` y `sync-data`. Encierran los
 procedimientos de arriba y una regla permanente: nunca escribir un valor de
 puntos que no se haya leído de la base de datos.
 
