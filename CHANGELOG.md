@@ -36,6 +36,9 @@ All notable changes to this project. Format based on
 - `scripts/analyse.py`: threat profile of a faction by toughness band, and
   weapons ranked by their worst bracket.
 
+- Default loadouts taken from BSData's declared defaults, covering 88% of
+  playable units, so `analyse.py --units` can score whole units per 100 points.
+
 ### Notes
 
 - Generated data is no longer tracked in git; see [NOTICE](NOTICE).

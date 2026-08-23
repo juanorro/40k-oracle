@@ -56,6 +56,7 @@ Main tables:
 | `unit_profiles` | M, T, Sv, W, Ld, OC, invulnerable save |
 | `mfm_points` | **official costs**, by model count and copy index |
 | `weapons`, `unit_weapons` | weapon profiles and who carries them |
+| `unit_loadout` | the wargear a unit ships with by default |
 | `unit_keywords`, `unit_abilities` | keywords, ability names |
 | `battle_sizes` | points, detachment and enhancement limits |
 | `detachments`, `enhancements` | build options and what unlocks them |
@@ -107,6 +108,7 @@ Every check comes from the catalogue data. None are hand-written rules.
 ```bash
 python3 scripts/analyse.py --threat "chaos space marines"
 python3 scripts/analyse.py --threat "chaos space marines" --attacker "death guard"
+python3 scripts/analyse.py --threat "chaos space marines" --attacker "death guard" --units
 ```
 
 The threat profile is one representative statline per toughness band — chaff,
@@ -115,8 +117,13 @@ field rather than guessing one list. Weapons are then ranked by their **worst**
 bracket, because a list that has to answer anything cannot afford a weapon that
 is excellent against one target and useless against the rest.
 
+`--units` scores whole units per 100 points using the default loadout the
+source ships them with, taken from BSData's declared defaults. It covers 88% of
+playable units; the rest have no derivable default.
+
 The damage model ignores Feel No Pain, cover, stratagems, rerolls and army
-rules. It compares weapons with each other; it does not predict a game.
+rules, and unit scoring also ignores durability and objective control. It
+compares entries with each other; it does not predict a game.
 
 ## Keeping up with dataslates
 

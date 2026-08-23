@@ -38,7 +38,8 @@ Schema of `index.db`:
 - `unit_keywords(unit_id, keyword)`
 - `unit_abilities(unit_id, ability)` — names only
 - `weapons(id, name, kind, range, attacks, skill, strength, ap, damage, keywords)`
-- `unit_weapons(unit_id, weapon_id)`
+- `unit_weapons(unit_id, weapon_id)` — every weapon in the unit's options
+- `unit_loadout(unit_id, model, count_min, count_max, weapon_id)` — the default wargear only
 - `battle_sizes(name, points, detachment_points, enhancements)` — army limits
 - `detachments(faction, name, detachment_points, objective, unique_tag, source)`
 - `enhancements(faction, name, points, detachment, source)` — one row per enhancement and detachment

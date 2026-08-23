@@ -38,7 +38,8 @@ Esquema de `index.db`:
 - `unit_keywords(unit_id, keyword)`
 - `unit_abilities(unit_id, ability)` — solo nombres
 - `weapons(id, name, kind, range, attacks, skill, strength, ap, damage, keywords)`
-- `unit_weapons(unit_id, weapon_id)`
+- `unit_weapons(unit_id, weapon_id)` — todas las armas de sus opciones
+- `unit_loadout(unit_id, model, count_min, count_max, weapon_id)` — solo el equipo por defecto
 - `battle_sizes(name, points, detachment_points, enhancements)` — límites del ejército
 - `detachments(faction, name, detachment_points, objective, unique_tag, source)`
 - `enhancements(faction, name, points, detachment, source)` — una fila por realce y destacamento

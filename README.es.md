@@ -59,6 +59,7 @@ Tablas principales:
 | `unit_profiles` | M, T, Sv, W, Ld, OC, salvación invulnerable |
 | `mfm_points` | **costes oficiales**, por nº de modelos y nº de copia |
 | `weapons`, `unit_weapons` | perfiles de arma y quién las lleva |
+| `unit_loadout` | el equipo con el que la unidad viene de serie |
 | `unit_keywords`, `unit_abilities` | keywords y nombres de habilidad |
 | `battle_sizes` | límites de puntos, destacamento y realces |
 | `detachments`, `enhancements` | opciones de construcción y qué las desbloquea |
@@ -110,6 +111,7 @@ Todas las comprobaciones salen del catálogo. Ninguna es una regla escrita a man
 ```bash
 python3 scripts/analyse.py --threat "chaos space marines"
 python3 scripts/analyse.py --threat "chaos space marines" --attacker "death guard"
+python3 scripts/analyse.py --threat "chaos space marines" --attacker "death guard" --units
 ```
 
 El perfil de amenaza toma una línea representativa por franja de resistencia
@@ -118,8 +120,14 @@ facción **puede** plantar, en vez de adivinar una lista. Las armas se ordenan
 por su **peor** bracket, porque una lista que tiene que responder a todo no
 puede permitirse un arma excelente contra un objetivo e inútil contra el resto.
 
+`--units` puntúa unidades enteras por 100 puntos usando el equipamiento por
+defecto con el que la fuente las envía, tomado de los defaults declarados en
+BSData. Cubre el 88% de las unidades jugables; el resto no tiene default
+derivable.
+
 El modelo de daño ignora Feel No Pain, cobertura, estratagemas, repeticiones y
-reglas de ejército. Compara armas entre sí; no predice una partida.
+reglas de ejército, y la puntuación por unidad ignora además durabilidad y
+control de objetivo. Compara entradas entre sí; no predice una partida.
 
 ## Seguir los dataslates
 
