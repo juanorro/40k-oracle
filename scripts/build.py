@@ -325,6 +325,98 @@ def faction_aliases(catalogue_sizes, mfm_aliases):
     return out
 
 
+def constraint(node, kind, field="selections"):
+    for con in node.get("constraints") or []:
+        if con.get("type") == kind and con.get("field") == field:
+            return con.get("value")
+    return None
+
+
+def weapon_profile_ids(node):
+    return [p["id"] for p in (node or {}).get("profiles") or []
+            if p.get("typeName") in WEAPON_TYPES]
+
+
+def resolve_default(group, id_map):
+    """The entry a group starts with.
+
+    `defaultSelectionEntryId` may name an entry or the id of an entryLink, in
+    which case the real entry is one hop further on.
+    """
+    target_id = group.get("defaultSelectionEntryId")
+    if not target_id:
+        return None
+    for child in group.get("selectionEntries") or []:
+        if child.get("id") == target_id:
+            return child
+    for link in group.get("entryLinks") or []:
+        if link.get("id") == target_id:
+            return id_map.get(link.get("targetId"))
+    return id_map.get(target_id)
+
+
+def default_weapon_ids(model, id_map, depth=0, groups_only=False):
+    """Weapons a model carries before anyone picks an option.
+
+    Anything linked directly is always carried. A group contributes only its
+    declared default. A mandatory group without a default of its own holds the
+    real choices one level down (a 'Wargear' group whose sub-groups each have a
+    default), so it is followed for sub-groups only — taking its own links
+    would hand the model every option at once.
+    """
+    if depth > 5:
+        return []
+    found = []
+    for link in model.get("entryLinks") or []:
+        # Inside a container, only fixed wargear counts: a link with min 1 is
+        # equipment the model always has, one without is an option.
+        if groups_only and (constraint(link, "min") or 0) < 1:
+            continue
+        found += weapon_profile_ids(id_map.get(link.get("targetId")))
+    for child in model.get("selectionEntries") or []:
+        mandatory = (constraint(child, "min") or 0) >= 1
+        if not mandatory and (groups_only or child.get("type") != "upgrade"):
+            continue
+        found += weapon_profile_ids(child)
+        found += default_weapon_ids(child, id_map, depth + 1)
+    for group in model.get("selectionEntryGroups") or []:
+        chosen = resolve_default(group, id_map)
+        if chosen is not None:
+            found += weapon_profile_ids(chosen)
+            found += default_weapon_ids(chosen, id_map, depth + 1)
+        else:
+            # A group with no default of its own is a container, not a choice:
+            # the real picks live one level down. Following sub-groups only is
+            # safe, because a genuine "choose one" holds its options as direct
+            # links, which groups_only skips.
+            found += default_weapon_ids(group, id_map, depth + 1, groups_only=True)
+    return found
+
+
+def default_loadout(unit, id_map):
+    """The unit as the source ships it: models, how many, and what they hold."""
+    rows = []
+    # A single-model unit is its own model: there is no child to look for.
+    if unit.get("type") == "model":
+        rows.append({"model": unit.get("name"), "count_min": 1, "count_max": 1,
+                     "weapons": default_weapon_ids(unit, id_map)})
+    for child in unit.get("selectionEntries") or []:
+        if child.get("type") == "model" and (constraint(child, "min") or 0) >= 1:
+            rows.append({"model": child.get("name"),
+                         "count_min": constraint(child, "min"),
+                         "count_max": constraint(child, "max") or constraint(child, "min"),
+                         "weapons": default_weapon_ids(child, id_map)})
+    for group in unit.get("selectionEntryGroups") or []:
+        chosen = resolve_default(group, id_map)
+        if chosen is None or chosen.get("type") != "model":
+            continue
+        rows.append({"model": chosen.get("name"),
+                     "count_min": constraint(group, "min") or 1,
+                     "count_max": constraint(group, "max") or constraint(group, "min") or 1,
+                     "weapons": default_weapon_ids(chosen, id_map)})
+    return rows
+
+
 def main():
     if not SRC.is_dir():
         sys.exit("No sources. Run scripts/sync-sources.sh first.")
@@ -425,6 +517,7 @@ def main():
                 "keywords": keywords_of(entry),
                 "abilities": ability_names(entry, id_map),
                 "weapons": [w["id"] for w in weapons],
+                "loadout": default_loadout(entry, id_map),
             })
 
         units.sort(key=lambda u: u["name"] or "")
@@ -544,6 +637,8 @@ def build_db(factions, units, weapons, detachments, enhancements, sizes,
                             attacks text, skill text, strength text, ap text,
                             damage text, keywords text);
       create table unit_weapons (unit_id text, weapon_id text);
+      create table unit_loadout (unit_id text, model text, count_min int,
+                                 count_max int, weapon_id text);
     """)
     con.executemany("insert into factions values (?,?,?,?)",
                     [(f["id"], f["name"], int(f["is_library"]), f["unit_count"]) for f in factions])
@@ -590,10 +685,14 @@ def build_db(factions, units, weapons, detachments, enhancements, sizes,
                      for w in weapons.values()])
     con.executemany("insert into unit_weapons values (?,?)",
                     [(u["id"], wid) for u in units for wid in u["weapons"]])
+    con.executemany("insert into unit_loadout values (?,?,?,?,?)",
+                    [(u["id"], row["model"], row["count_min"], row["count_max"], wid)
+                     for u in units for row in u["loadout"] for wid in row["weapons"]])
     con.executescript("""
       create index units_faction_idx on units(faction_id);
       create index unit_keywords_idx on unit_keywords(keyword);
       create index unit_weapons_idx on unit_weapons(unit_id);
+      create index unit_loadout_idx on unit_loadout(unit_id);
       create index weapons_name_idx on weapons(name);
       create index mfm_points_idx on mfm_points(faction, unit_norm);
       create index detachments_idx on detachments(faction, name);
